@@ -53,7 +53,7 @@ setInterval(() => {
 	val += 7;
 }, 25);
 
-setTimeout(() => {
+setInterval(() => {
 	etherlab.liveData(false);
 }, 3000);
 
