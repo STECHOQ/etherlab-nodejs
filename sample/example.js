@@ -50,6 +50,8 @@ setInterval(() => {
 		{index: 1, value: val+1},
 	]);
 
+	etherlab.write(1, 0x7020, 0x01, val + 2);
+
 	val += 7;
 }, 25);
 
