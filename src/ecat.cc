@@ -654,7 +654,7 @@ void thread_entry(TsfnContext *context) {
 
 		for(uint8_t index = 0; index < IOs_length; index++){
 			Napi::Object indexValue = Napi::Object::New(env);
-			indexValue.Set("slavePos", Napi::Value::From(env, IOs[index].position));
+			indexValue.Set("position", Napi::Value::From(env, IOs[index].position));
 			indexValue.Set("index", Napi::Value::From(env, IOs[index].index));
 			indexValue.Set("subindex", Napi::Value::From(env, IOs[index].subindex));
 			indexValue.Set("value", Napi::Value::From(env, IOs[index].value));
@@ -889,7 +889,7 @@ Napi::Promise get_allocated_domain(const Napi::CallbackInfo& info) {
 	Napi::Array _domains = Napi::Array::New(env, IOs_length);
 	for(uint8_t index = 0; index < IOs_length; index++){
 		Napi::Object item = Napi::Object::New(env);
-		item.Set("slavePos", Napi::Value::From(env, IOs[index].position));
+		item.Set("position", Napi::Value::From(env, IOs[index].position));
 		item.Set("vendorId", Napi::Value::From(env, IOs[index].vendor_id));
 		item.Set("productCode", Napi::Value::From(env, IOs[index].product_code));
 		item.Set("pdoIndex", Napi::Value::From(env, IOs[index].pdo_index));
@@ -927,7 +927,7 @@ Napi::Promise get_domain_values(const Napi::CallbackInfo& info){
 
 	for(uint8_t index = 0; index < IOs_length; index++){
 		Napi::Object indexValue = Napi::Object::New(env);
-		indexValue.Set("slavePos", Napi::Value::From(env, IOs[index].position));
+		indexValue.Set("position", Napi::Value::From(env, IOs[index].position));
 		indexValue.Set("index", Napi::Value::From(env, IOs[index].index));
 		indexValue.Set("subindex", Napi::Value::From(env, IOs[index].subindex));
 		indexValue.Set("value", Napi::Value::From(env, IOs[index].value));
