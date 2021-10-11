@@ -1,12 +1,12 @@
-const __etherlab = require('../../');
+const __etherlab = require('..');
 
-const config = './slaves.sample.json';
-const frequency = 1000;
+const config = __dirname + '/slaves.sample.json';
+const frequency = 2500;
 
 const etherlab = new __etherlab(config, frequency);
 
 etherlab.on('data', (data, latency) => {
-	console.log(data, latency);
+	console.log(data);
 	console.log(etherlab.getLatencyAndJitter());
 });
 
@@ -52,10 +52,6 @@ setInterval(() => {
 
 	val += 7;
 }, 25);
-
-setInterval(() => {
-	etherlab.liveData(false);
-}, 3000);
 
 setTimeout(() => {
 	setInterval(async () => {

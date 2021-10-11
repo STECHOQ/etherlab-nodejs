@@ -12,6 +12,15 @@
 		"vendor_id": "0x00000002",
 		"product_code": "0x0fa43052",
 
+		"parameters": [
+			{
+				"index": "0x8000",
+				"subindex": "0x02",
+				"size": 8,
+				"value": "0x01"
+			}
+		],
+
 		"syncs": [
 			{
 				"index": 2,
@@ -88,6 +97,7 @@
 		"product_code": "0x18503052",
 
 		"syncs": [
+
 			{
 				"index": 2,
 				"watchdog_enabled": false,
@@ -127,6 +137,27 @@
 					},
 
 					{
+						"index": "0x1a01",
+						"entries": [
+							{
+								"index": "0x6010",
+								"subindex": "0x01",
+								"size": 16,
+
+								"add_to_domain": true,
+								"swap_endian": true,
+								"signed": false
+							}
+						]
+					},
+					{
+						"index": "0x1a02"
+					},
+					{
+						"index": "0x1a03"
+					},
+
+					{
 						"index": "0x1a80",
 						"entries": [
 							{
@@ -144,7 +175,7 @@
 								"subindex": "0x02",
 								"size": 8,
 
-								"add_to_domain": false,
+								"add_to_domain": true,
 								"swap_endian": false,
 								"signed": false
 							},
@@ -225,7 +256,7 @@
 				"index": "0x8000",
 				"subindex": "0x04",
 				"size": 32,
-				"value": "0x55"
+				"value": "0x92"
 			},
 			{
 				"index": "0x8000",
@@ -249,10 +280,47 @@
 				"index": "0x8000",
 				"subindex": "0x24",
 				"size": 8,
-				"value": "0xc3"
+				"value": "0x50"
 			},
 			{
 				"index": "0x8000",
+				"subindex": "0x28",
+				"size": 16,
+				"value": "0x23"
+			},
+
+			{
+				"index": "0x8010",
+				"subindex": "0x04",
+				"size": 32,
+				"value": "0x55"
+			},
+			{
+				"index": "0x8010",
+				"subindex": "0x05",
+				"size": 32,
+				"value": "0x014d"
+			},
+			{
+				"index": "0x8010",
+				"subindex": "0x20",
+				"size": 8,
+				"value": "0x11"
+			},
+			{
+				"index": "0x8010",
+				"subindex": "0x21",
+				"size": 8,
+				"value": "0x2b"
+			},
+			{
+				"index": "0x8010",
+				"subindex": "0x24",
+				"size": 8,
+				"value": "0xc2"
+			},
+			{
+				"index": "0x8010",
 				"subindex": "0x28",
 				"size": 16,
 				"value": "0x23"
@@ -265,6 +333,39 @@
 		"position": 3,
 		"vendor_id": "0x00000002",
 		"product_code": "0x0c663052",
+
+		"parameters": [
+			{
+				"index": "0x8000",
+				"subindex": "0x02",
+				"size": 8,
+				"value": "0x01"
+			},
+			{
+				"index": "0x800D",
+				"subindex": "0x11",
+				"size": 16,
+				"value": "0x0E"
+			},
+			{
+				"index": "0x8010",
+				"subindex": "0x02",
+				"size": 8,
+				"value": "0x01"
+			},
+			{
+				"index": "0x8020",
+				"subindex": "0x02",
+				"size": 8,
+				"value": "0x01"
+			},
+			{
+				"index": "0x8030",
+				"subindex": "0x02",
+				"size": 8,
+				"value": "0x01"
+			}
+		],
 
 		"syncs": [
 			{
@@ -575,7 +676,71 @@
 		"alias": 0,
 		"position": 4,
 		"vendor_id": "0x00000002",
-		"product_code": "0x0c663052",
+		"product_code": "0x07d43052",
+
+		"syncs": [
+			{
+				"index": 2,
+				"watchdog_enabled": false,
+				"pdos": [
+					{
+						"index": "0x1600",
+						"entries": [
+							{
+								"index": "0x7000",
+								"subindex": "0x01",
+								"size": 1,
+
+								"add_to_domain": true
+							}
+						]
+					},
+					{
+						"index": "0x1601",
+						"entries": [
+							{
+								"index": "0x7010",
+								"subindex": "0x01",
+								"size": 1,
+
+								"add_to_domain": true
+							}
+						]
+					},
+					{
+						"index": "0x1602",
+						"entries": [
+							{
+								"index": "0x7020",
+								"subindex": "0x01",
+								"size": 1,
+
+								"add_to_domain": true
+							}
+						]
+					},
+					{
+						"index": "0x1603",
+						"entries": [
+							{
+								"index": "0x7030",
+								"subindex": "0x01",
+								"size": 1,
+
+								"add_to_domain": true
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+
+	{
+		"alias": 0,
+		"position": 5,
+		"vendor_id": "0x00000002",
+		"product_code": "0x03ec3052",
 
 		"syncs": [
 			{
@@ -588,292 +753,45 @@
 							{
 								"index": "0x6000",
 								"subindex": "0x01",
-								"size": 1
-							},
+								"size": 1,
 
-							{
-								"index": "0x6000",
-								"subindex": "0x02",
-								"size": 1
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x03",
-								"size": 2
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x05",
-								"size": 2
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x07",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 5
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x0e",
-								"size": 1
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x0f",
-								"size": 1
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x10",
-								"size": 1
-							},
-
-							{
-								"index": "0x6000",
-								"subindex": "0x11",
-								"size": 16,
-
-								"add_to_domain": true,
-								"signed": false
+								"add_to_domain": true
 							}
 						]
 					},
+					{
+						"index": "0x1a01",
+						"entries": [
+							{
+								"index": "0x6010",
+								"subindex": "0x01",
+								"size": 1,
 
+								"add_to_domain": true
+							}
+						]
+					},
 					{
 						"index": "0x1a02",
 						"entries": [
 							{
-								"index": "0x6010",
+								"index": "0x6020",
 								"subindex": "0x01",
-								"size": 1
-							},
+								"size": 1,
 
-							{
-								"index": "0x6010",
-								"subindex": "0x02",
-								"size": 1
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x03",
-								"size": 2
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x05",
-								"size": 2
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x07",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 5
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x0e",
-								"size": 1
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x0f",
-								"size": 1
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x10",
-								"size": 1
-							},
-
-							{
-								"index": "0x6010",
-								"subindex": "0x11",
-								"size": 16,
-
-								"add_to_domain": true,
-								"signed": false
+								"add_to_domain": true
 							}
 						]
 					},
-
 					{
-						"index": "0x1a04",
-						"entries": [
-							{
-								"index": "0x6020",
-								"subindex": "0x01",
-								"size": 1
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x02",
-								"size": 1
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x03",
-								"size": 2
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x05",
-								"size": 2
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x07",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 5
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x0e",
-								"size": 1
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x0f",
-								"size": 1
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x10",
-								"size": 1
-							},
-
-							{
-								"index": "0x6020",
-								"subindex": "0x11",
-								"size": 16,
-
-								"add_to_domain": true,
-								"signed": false
-							}
-						]
-					},
-
-					{
-						"index": "0x1a06",
+						"index": "0x1a03",
 						"entries": [
 							{
 								"index": "0x6030",
 								"subindex": "0x01",
-								"size": 1
-							},
+								"size": 1,
 
-							{
-								"index": "0x6030",
-								"subindex": "0x02",
-								"size": 1
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x03",
-								"size": 2
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x05",
-								"size": 2
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x07",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 1
-							},
-
-							{
-								"index": "0x0000",
-								"subindex": "0x00",
-								"size": 5
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x0e",
-								"size": 1
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x0f",
-								"size": 1
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x10",
-								"size": 1
-							},
-
-							{
-								"index": "0x6030",
-								"subindex": "0x11",
-								"size": 16,
-
-								"add_to_domain": true,
-								"signed": false
+								"add_to_domain": true
 							}
 						]
 					}

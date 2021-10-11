@@ -1,7 +1,7 @@
 {
 	"name": "etherlab-nodejs",
 	"version": "0.0.1",
-	"description": "Use Ethercat directly from node.js",
+	"description": "Bind Etherlab to node.js",
 	"main": "lib/ecat.lib.js",
 	"bin": "bin/cli.js",
 	"scripts": {
