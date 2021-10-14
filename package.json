@@ -3,7 +3,10 @@
 	"version": "0.0.1",
 	"description": "Bind Etherlab to node.js",
 	"main": "lib/ecat.lib.js",
-	"bin": "bin/cli.js",
+	"bin": {
+		"ecat-run": "bin/cli.js",
+		"ecat-config": "bin/configure.js"
+	},
 	"scripts": {
 		"preinstall": "rm -rf build/",
 		"postinstall": "node-gyp rebuild",
