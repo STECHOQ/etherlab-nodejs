@@ -4,17 +4,25 @@ const fs = require('fs');
 const path = require('path');
 
 function _CONFIG_(configs = {}){
-	const {path, port, slaves, frequency, interval, autostart } = configs;
+	const {
+			socket,
+			path,
+			port,
+			slaves,
+			frequency,
+			interval,
+			autostart
+		} = configs;
 
 	this.socket = {
-		type: configs.socket.type,
-		path: configs.socket.path,
-		port: configs.socket.port,
+		type: socket && socket.type,
+		path: socket && socket.path,
+		port: socket && socket.port,
 	};
-	this.slaves = configs.slaves;
-	this.frequency = configs.frequency;
-	this.interval = configs.interval;
-	this.autostart = configs.autostart;
+	this.slaves = slaves;
+	this.frequency = frequency;
+	this.interval = interval;
+	this.autostart = autostart;
 }
 
 function readConfigFile(filepath){
