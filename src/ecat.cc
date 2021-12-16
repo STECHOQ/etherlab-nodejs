@@ -301,7 +301,7 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 	// find length of valid domain inside slave_entries
 	*DomainN_length = 0;
 	for(i = 0; i < length; i++){
-		if(slave_entries[i].index && slave_entries[i].subindex && slave_entries[i].add_to_domain){
+		if(slave_entries[i].add_to_domain){
 			(*DomainN_length)++;
 		}
 	}
@@ -315,7 +315,7 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 
 	// add every valid slave process data into domain
 	for(i = 0, index = 0; i < length; i++){
-		if(slave_entries[i].index && slave_entries[i].subindex && slave_entries[i].add_to_domain){
+		if(slave_entries[i].add_to_domain){
 			// create IOs domain to access domain value
 			IOs[index] = {
 					slave_entries[i].alias,
