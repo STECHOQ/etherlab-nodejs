@@ -599,6 +599,8 @@ void stack_prefault(void){
 Napi::Value init_slave(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
+	uint64_t do_sort_slave = 0;
+
 	if (info.Length() < 1 || !info[0].IsString()){
 		Napi::TypeError::New(env, "Expected 1 Parameter(s) to be passed [ String ]")
 			.ThrowAsJavaScriptException();
@@ -613,9 +615,20 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 		return env.Null();
 	}
 
+	if (info.Length() == 2){
+		do_sort_slave = info[1].As<Napi::Boolean>() ? 1 : 0;
+	}
+
 	std::string json_path = info[0].ToString().Utf8Value();
 
-	int8_t parsing = parse_json_file(&json_path[0], &slave_entries, &slave_entries_length, &startup_parameters, &startup_parameters_length);
+	int8_t parsing = parse_json_file(
+			&json_path[0],
+			&slave_entries,
+			&slave_entries_length,
+			&startup_parameters,
+			&startup_parameters_length,
+			do_sort_slave
+		);
 
 	return Napi::Number::New(env, parsing);
 }
