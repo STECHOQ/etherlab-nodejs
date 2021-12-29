@@ -619,7 +619,7 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 		do_sort_slave = info[1].As<Napi::Boolean>() ? 1 : 0;
 	}
 
-	std::string json_path = info[0].ToString().Utf8Value();
+	std::string json_path = info[0].As<Napi::String>();
 
 	int8_t parsing = parse_json_file(
 			&json_path[0],
@@ -752,11 +752,6 @@ void thread_entry(TsfnContext *context) {
 	fprintf(stdout, "\nUsing priority %i\n", param.sched_priority);
 	if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
 		perror("sched_setscheduler failed");
-	}
-
-	/* Lock memory */
-	if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
-		fprintf(stderr, "Warning: Failed to lock memory: %s\n", strerror(errno));
 	}
 
 	stack_prefault();
