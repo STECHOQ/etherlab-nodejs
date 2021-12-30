@@ -1,6 +1,6 @@
 {
 	"name": "etherlab-nodejs",
-	"version": "0.0.2",
+	"version": "0.1.0",
 	"description": "Bind Etherlab's ethercat master to node.js",
 	"main": "lib/ecat.lib.js",
 	"bin": {

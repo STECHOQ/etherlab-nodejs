@@ -48,5 +48,5 @@ off_t get_filesize(const char *);
 std::string normalize_hex_string(std::string);
 uint32_t _to_uint(const rapidjson::Value&);
 uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
-int8_t parse_json_file(const char *, slaveEntry **, uint8_t *, startupConfig **, uint8_t *);
+int8_t parse_json_file(const char *, slaveEntry **, uint8_t *, startupConfig **, uint8_t *, uint8_t );
 int32_t _slave_entries_sort_asc(const void *, const void *);

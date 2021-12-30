@@ -43,7 +43,8 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 }
 
 int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t *slave_length,
-					startupConfig **slave_parameters, uint8_t *parameters_length){
+					startupConfig **slave_parameters, uint8_t *parameters_length,
+					uint8_t do_sort_slave){
 
 	const off_t filesize = get_filesize(filename);
 
@@ -276,7 +277,9 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 	}
 
 	// sort slave entries asc
-	qsort(*slave_entries, *slave_length, sizeof(slaveEntry), _slave_entries_sort_asc);
+	if(do_sort_slave == 1){
+		qsort(*slave_entries, *slave_length, sizeof(slaveEntry), _slave_entries_sort_asc);
+	}
 
 #ifdef DEBUG
 	printf("slave_length = %d\n", *slave_length);
