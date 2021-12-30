@@ -140,6 +140,24 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 				watchdog_enabled = (uint8_t) m_syncs["watchdog_enabled"].GetBool();
 			}
 
+			// override default 'direction' value if it's defined
+			if(m_syncs.HasMember("direction")){
+				assert(m_syncs["direction"].IsString());
+
+				std::string sync_direction = m_syncs["direction"].GetString();
+
+				if(sync_direction == "input"){
+					direction = EC_DIR_INPUT;
+				} else if(sync_direction == "output"){
+					direction = EC_DIR_OUTPUT;
+				} else {
+					throw std::invalid_argument(
+						"\"" + sync_direction + "\" is invalid value. "
+						+ "'direction' value must be \"input\" or \"output\""
+					);
+				}
+			}
+
 			rapidjson::Value arr_pdos = m_syncs["pdos"].GetArray();
 			uint8_t size_arr_pdos = arr_pdos.Size();
 
