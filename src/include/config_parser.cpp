@@ -117,6 +117,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 					0,
 					0,
 					0,
+					0,
 					0
 				};
 
@@ -178,6 +179,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 							position,
 							vendor_id,
 							product_code,
+							sync_index,
 							pdo_index,
 							0,
 							0,
@@ -243,6 +245,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 							position,
 							vendor_id,
 							product_code,
+							sync_index,
 							pdo_index,
 							entry_index,
 							entry_subindex,

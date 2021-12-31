@@ -22,6 +22,7 @@ typedef struct slaveEntry{
 	uint32_t vendor_id; /**< Slave vendor ID. */
 	uint32_t product_code; /**< Slave product code. */
 
+	uint8_t sync_index; /**< SM index. */
 	uint16_t pdo_index; /**< PDO entry index. */
 
 	uint16_t index; /**< PDO entry index. */
