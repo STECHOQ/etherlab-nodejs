@@ -322,6 +322,7 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 					slave_entries[i].position,
 					slave_entries[i].vendor_id,
 					slave_entries[i].product_code,
+					slave_entries[i].sync_index,
 					slave_entries[i].pdo_index,
 					slave_entries[i].index,
 					slave_entries[i].subindex,
@@ -395,7 +396,7 @@ void syncmanager_startup_config(){
 	// add every valid slave and configure sync manager
 	for(i = 0; i < length; i++){
 		processed_index_sub_size = _convert_index_sub_size(slave_entries[i].index, slave_entries[i].subindex, slave_entries[i].size);
-		syncM_index = slave_entries[i].direction % 2 ? 2 : 3;
+		syncM_index = slave_entries[i].sync_index;
 
 #ifdef DEBUG
 		printf("\nSlave%2d 0x%04x 0x%08x %02d-bits\n", slave_entries[i].position, slave_entries[i].pdo_index, processed_index_sub_size, slave_entries[i].size);
@@ -619,7 +620,7 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 		do_sort_slave = info[1].As<Napi::Boolean>() ? 1 : 0;
 	}
 
-	std::string json_path = info[0].ToString().Utf8Value();
+	std::string json_path = info[0].As<Napi::String>();
 
 	int8_t parsing = parse_json_file(
 			&json_path[0],
@@ -752,11 +753,6 @@ void thread_entry(TsfnContext *context) {
 	fprintf(stdout, "\nUsing priority %i\n", param.sched_priority);
 	if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
 		perror("sched_setscheduler failed");
-	}
-
-	/* Lock memory */
-	if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
-		fprintf(stderr, "Warning: Failed to lock memory: %s\n", strerror(errno));
 	}
 
 	stack_prefault();

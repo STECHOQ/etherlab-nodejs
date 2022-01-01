@@ -26,35 +26,39 @@
 			[
 				"buildtarget!='DEBUG'", {
 					"cflags": [
-						"-fno-exceptions",
+						"-fexceptions",
 						"-lstdc++",
 						"-Iinclude",
 						"-g",
+						"-Og",
 						"-lpthread"
 					],
 					"cflags_cc": [
-						"-fno-exceptions",
+						"-fexceptions",
 						"-lstdc++",
 						"-Iinclude",
 						"-g",
+						"-Og",
 						"-lpthread"
 					]
 				},
 				"buildtarget=='DEBUG'", {
 					"cflags": [
 						"-DDEBUG",
-						"-fno-exceptions",
+						"-fexceptions",
 						"-lstdc++",
 						"-Iinclude",
 						"-g",
+						"-Og",
 						"-lpthread"
 					],
 					"cflags_cc": [
 						"-DDEBUG",
-						"-fno-exceptions",
+						"-fexceptions",
 						"-lstdc++",
 						"-Iinclude",
 						"-g",
+						"-Og",
 						"-lpthread"
 					]
 				}
