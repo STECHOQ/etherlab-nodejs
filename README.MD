@@ -17,6 +17,8 @@ ln -s /opt/etherlab/include/ecrt.h /usr/local/include/ecrt.h
 
 ## Slaves Configuration
 
+[How to create slave json configuration](https://github.com/STECHOQ/etherlab-nodejs/wiki/create-slaves-json)
+
 Each slave is configured via json file. For example, if a master has 1 **Beckhoff EL2008** slave attached, then the configuration would look like this
 
 ```json
