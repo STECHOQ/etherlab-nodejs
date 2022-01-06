@@ -622,7 +622,7 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 
 	std::string json_path = info[0].As<Napi::String>();
 
-	int8_t parsing = parse_json_file(
+	int8_t parsing = parse_json(
 			&json_path[0],
 			&slave_entries,
 			&slave_entries_length,

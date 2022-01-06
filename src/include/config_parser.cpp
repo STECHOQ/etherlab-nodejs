@@ -42,31 +42,13 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 	return doc[name].Size() > 0 ? 1 : 0;
 }
 
-int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t *slave_length,
-					startupConfig **slave_parameters, uint8_t *parameters_length,
-					uint8_t do_sort_slave){
-
-	const off_t filesize = get_filesize(filename);
-
-	if(filesize == -1){
-		fprintf(stderr, "filesize error : %s\n", filename);
-		return filesize;
-	}
-
-	FILE *fp = fopen(filename, "r");
-
-	if(fp == NULL){
-		fprintf(stderr, "File is not accessible : %s", filename);
-		return -1;
-	}
-
-	char readBuffer[filesize];
-	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
+					uint8_t *slave_length, startupConfig **slave_parameters,
+					uint8_t *parameters_length,	uint8_t do_sort_slave){
 
 	rapidjson::Document document;
-	document.ParseStream(is);
+	document.Parse(json_string);
 
-	fclose(fp);
 	assert(document.IsArray());
 
 	/* allocate memory if length is still 0 */
