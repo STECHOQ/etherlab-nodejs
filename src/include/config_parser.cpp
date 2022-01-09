@@ -42,25 +42,18 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 	return doc[name].Size() > 0 ? 1 : 0;
 }
 
-int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
-					uint8_t *slave_length, startupConfig **slave_parameters,
-					uint8_t *parameters_length,	uint8_t do_sort_slave){
+int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entries,
+					uint8_t *slave_length, std::vector<startupConfig> &slave_parameters,
+					uint8_t *parameters_length, uint8_t do_sort_slave){
 
 	rapidjson::Document document;
 	document.Parse(json_string);
 
 	assert(document.IsArray());
 
-	/* allocate memory if length is still 0 */
-	if(*slave_length == 0){
-		*slave_entries = (slaveEntry*) malloc(sizeof(slaveEntry));
-	}
 	*slave_length = 0;
-
-	if(*parameters_length == 0){
-		*slave_parameters = (startupConfig*) malloc(sizeof(startupConfig));
-	}
 	*parameters_length = 0;
+
 	/* ************************************ */
 
 	for (uint8_t i_slaves = 0, crnt_idx_slaves = -1; i_slaves < document.Size(); i_slaves++){
@@ -80,9 +73,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 		if(!member_is_valid_array(m_slaves, "syncs")){
 			crnt_idx_slaves = (*slave_length)++;
 
-			*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-			(*slave_entries)[crnt_idx_slaves] = {
+			slave_entries.push_back({
 					alias,
 					position,
 					vendor_id,
@@ -101,7 +92,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 					0,
 					0,
 					0
-				};
+				});
 
 			continue;
 		}
@@ -154,9 +145,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 				if(!member_is_valid_array(m_pdos, "entries")){
 					crnt_idx_slaves = (*slave_length)++;
 
-					*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-					(*slave_entries)[crnt_idx_slaves] = {
+					slave_entries.push_back({
 							alias,
 							position,
 							vendor_id,
@@ -175,7 +164,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 							0,
 							0,
 							0
-						};
+						});
 
 					continue;
 				}
@@ -220,9 +209,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 					// add new slave entry
 					crnt_idx_slaves = (*slave_length)++;
 
-					*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-					(*slave_entries)[crnt_idx_slaves] = {
+					slave_entries.push_back({
 							alias,
 							position,
 							vendor_id,
@@ -241,7 +228,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 							entry_signed,
 							0,
 							watchdog_enabled
-						};
+						});
 				}
 
 			}
@@ -265,15 +252,14 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 				uint32_t p_value = _to_uint(m_parameters["value"]);
 
 				uint8_t crnt_idx_parameters = (*parameters_length)++;
-				*slave_parameters = (startupConfig*) realloc(*slave_parameters, (*parameters_length) * sizeof(startupConfig));
 
-				(*slave_parameters)[crnt_idx_parameters] = {
+				slave_parameters.push_back({
 						p_size,
 						(uint8_t) position,
 						p_index,
 						p_subindex,
 						p_value
-					};
+					});
 			}
 		}
 
@@ -281,7 +267,7 @@ int8_t parse_json(const char *json_string, slaveEntry **slave_entries,
 
 	// sort slave entries asc
 	if(do_sort_slave == 1){
-		qsort(*slave_entries, *slave_length, sizeof(slaveEntry), _slave_entries_sort_asc);
+		//~ qsort(*slave_entries, *slave_length, sizeof(slaveEntry), _slave_entries_sort_asc);
 	}
 
 #ifdef DEBUG
