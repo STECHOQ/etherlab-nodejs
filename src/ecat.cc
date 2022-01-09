@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include <thread>
+#include <vector>
 
 #include <napi.h>
 
@@ -50,18 +51,18 @@ static uint32_t counter = 0;
 static int8_t _running_state = -1;
 
 // slave configurations
-static struct ec_slave_config **sc_slaves;
+static std::vector<ec_slave_config_t*> sc_slaves;
 
-static slaveConfig *slaves = NULL;
+static std::vector<slaveConfig> slaves;
 static uint8_t slaves_length = 0;
 
-static slaveEntry *IOs = NULL;
+static std::vector<slaveEntry> IOs;
 static uint8_t IOs_length = 0;
 
-static slaveEntry *slave_entries = NULL;
+static std::vector<slaveEntry> slave_entries;
 static uint8_t slave_entries_length = 0;
 
-static startupConfig *startup_parameters = NULL;
+static std::vector<startupConfig> startup_parameters;
 static uint8_t startup_parameters_length = 0;
 
 static uint16_t FREQUENCY = 1000;
@@ -159,7 +160,7 @@ uint8_t check_is_operational(){
 
 int8_t write_output_value(uint8_t index, uint32_t value, uint8_t SIGNED){
 	// selected index is not output, return immediately
-	if(!IOs[index].direction % 2){
+	if(IOs[index].direction != EC_DIR_OUTPUT){
 		return -1;
 	}
 
@@ -237,7 +238,7 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 		uint32_t tmp32;
 
 		for(uint8_t index = 0; index < length; index++){
-			if(IOs[index].direction % 2){
+			if(IOs[index].direction == EC_DIR_OUTPUT){
 				write_output_value(index, IOs[index].writtenValue, IOs[index].SIGNED);
 			}
 
@@ -294,7 +295,6 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 	size_t size;
 
 	if((*DomainN_length) == 0){
-		IOs = (slaveEntry*) malloc(sizeof(slaveEntry));
 		*DomainN_regs = (ec_pdo_entry_reg_t*) malloc(sizeof(ec_pdo_entry_reg_t));
 	}
 
@@ -311,13 +311,16 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 
 	// reallocate domain_regs
 	*DomainN_regs = (ec_pdo_entry_reg_t*) realloc(*DomainN_regs, size);
-	IOs = (slaveEntry*) realloc(IOs, ((*DomainN_length) + 1) * sizeof(slaveEntry));
+
+	// reserve vector memory allocation,
+	// in order to avoid pointer address change everytime we push_back new value
+	IOs.reserve(length);
 
 	// add every valid slave process data into domain
 	for(i = 0, index = 0; i < length; i++){
 		if(slave_entries[i].add_to_domain){
 			// create IOs domain to access domain value
-			IOs[index] = {
+			IOs.push_back({
 					slave_entries[i].alias,
 					slave_entries[i].position,
 					slave_entries[i].vendor_id,
@@ -335,7 +338,7 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 					slave_entries[i].SWAP_ENDIAN,
 					slave_entries[i].SIGNED,
 					slave_entries[i].writtenValue
-				};
+				});
 
 			// register domain with IOs
 			(*DomainN_regs)[index] = {
@@ -507,21 +510,17 @@ void slave_startup_config(ec_master_t *master){
 			printf("Slave %2d: 0x%08x 0x%08x\n", current.position, current.vendor_id, current.product_code);
 #endif
 
-			// reallocate memory sizr for slaves and sc_slaves
-			slaves = (slaveConfig*) realloc(slaves, (slaves_length+1) * sizeof(slaveConfig));
-			sc_slaves = (ec_slave_config_t**) realloc(sc_slaves, (slaves_length+1) * sizeof(ec_slave_config_t*));
-
 			// save current slave information in global slaves
-			slaves[slaves_length] = current;
+			slaves.push_back(current);
 
 			// configure slave
-			sc_slaves[slaves_length] = ecrt_master_slave_config(
+			sc_slaves.push_back(ecrt_master_slave_config(
 					master,
 					current.alias,
 					current.position,
 					current.vendor_id,
 					current.product_code
-				);
+				));
 
 			// update number of slaves
 			slaves_length++;
@@ -588,6 +587,19 @@ void startup_parameters_config(){
 	}
 }
 
+void reset_global_vars(void){
+	IOs_length = 0;
+	slaves_length = 0;
+	slave_entries_length = 0;
+	startup_parameters_length = 0;
+
+	IOs.clear();
+	slaves.clear();
+	slave_entries.clear();
+	startup_parameters.clear();
+	sc_slaves.clear();
+}
+
 /****************************************************************************/
 
 void stack_prefault(void){
@@ -624,9 +636,9 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 
 	int8_t parsing = parse_json(
 			&json_path[0],
-			&slave_entries,
+			slave_entries,
 			&slave_entries_length,
-			&startup_parameters,
+			startup_parameters,
 			&startup_parameters_length,
 			do_sort_slave
 		);
@@ -766,8 +778,6 @@ void thread_entry(TsfnContext *context) {
 	wakeup_time.tv_nsec = 0;
 
 	// free allocated memories from startup configurations
-	free(slave_entries);
-	free(startup_parameters);
 	free(DomainN_regs);
 
 	_running_state = 1;
@@ -775,7 +785,7 @@ void thread_entry(TsfnContext *context) {
 	while (1) {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
 
-		if (ret) {
+		if (ret || !_running_state) {
 			fprintf(stderr, "\nBreak Cyclic Process %d\n", ret);
 			context->tsfn.Abort();
 			break;
@@ -801,9 +811,7 @@ void thread_entry(TsfnContext *context) {
 		}
 	}
 
-	free(slaves);
-	free(sc_slaves);
-	free(IOs);
+	reset_global_vars();
 
 	ecrt_master_deactivate(master);
 	ecrt_release_master(master);
@@ -813,13 +821,6 @@ void thread_entry(TsfnContext *context) {
 
 Napi::Value create_tsfn(const Napi::CallbackInfo &info) {
 	Napi::Env env = info.Env();
-
-	if(_running_state != -1){
-		Napi::TypeError::New(env, "Ethercat is already running!")
-			.ThrowAsJavaScriptException();
-
-		return env.Null();
-	}
 
 	// Construct context data
 	auto _ctx = new TsfnContext(env);
