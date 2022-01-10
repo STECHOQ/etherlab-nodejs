@@ -487,55 +487,67 @@ void syncmanager_startup_config(){
 	}
 }
 
+uint8_t _skip_current_slave_position(uint16_t position, std::vector<uint8_t>& last_positions){
+	for(uint8_t sl_index = 0; sl_index < last_positions.size(); sl_index++){
+		if(position == last_positions[sl_index]){
+			return 1;
+			break;
+		}
+	}
+
+	return 0;
+}
+
 void slave_startup_config(ec_master_t *master){
 #ifdef DEBUG
 	fprintf(stdout, "\nConfiguring Slaves...\n");
 #endif
 
 	uint8_t length = slave_entries_length;
-	int8_t lastSlave = -1;
+	std::vector<uint8_t> last_positions;
 
 	for(uint8_t i = 0; i < length; i++){
-		// this scope must have slave entries to be sorted first
-		if(slave_entries[i].position > lastSlave){
-			// current slave
-			slaveConfig current = {
-					slave_entries[i].alias,
-					slave_entries[i].position,
-					slave_entries[i].vendor_id,
-					slave_entries[i].product_code,
-					{}
-				};
-
-#ifdef DEBUG
-			printf("Slave %2d: 0x%08x 0x%08x\n", current.position, current.vendor_id, current.product_code);
-#endif
-
-			// save current slave information in global slaves
-			slaves.push_back(current);
-
-			// configure slave
-			sc_slaves.push_back(ecrt_master_slave_config(
-					master,
-					current.alias,
-					current.position,
-					current.vendor_id,
-					current.product_code
-				));
-
-			// update number of slaves
-			slaves_length++;
-
-			// save last slave's position
-			lastSlave = slave_entries[i].position;
+		// skip current slave, if it's already configured
+		if(_skip_current_slave_position(slave_entries[i].position, last_positions)){
+			continue;
 		}
 
+		// current slave
+		slaveConfig current = {
+				slave_entries[i].alias,
+				slave_entries[i].position,
+				slave_entries[i].vendor_id,
+				slave_entries[i].product_code,
+				{}
+			};
+
 #ifdef DEBUG
-		printf("lastSlave: %2d | Current: Slave %2d %04x %04x %02x\n",
-			lastSlave, slave_entries[i].position, slave_entries[i].pdo_index,
-			slave_entries[i].index, slave_entries[i].subindex);
+		printf("Slave %2d: 0x%08x 0x%08x\n", current.position, current.vendor_id, current.product_code);
 #endif
 
+		// save current slave information in global slaves
+		slaves.push_back(current);
+
+		// configure slave
+		sc_slaves.push_back(ecrt_master_slave_config(
+				master,
+				current.alias,
+				current.position,
+				current.vendor_id,
+				current.product_code
+			));
+
+		// update number of slaves
+		slaves_length++;
+
+		// save last slave's position
+		last_positions.push_back(current.position);
+
+#ifdef DEBUG
+		printf("Current: Slave %2d %04x %04x %02x\n",
+			slave_entries[i].position, slave_entries[i].pdo_index,
+			slave_entries[i].index, slave_entries[i].subindex);
+#endif
 	}
 }
 
@@ -621,7 +633,7 @@ void stack_prefault(void){
 Napi::Value init_slave(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	uint64_t do_sort_slave = 0;
+	bool do_sort_slave = 0;
 
 	if (info.Length() < 1 || !info[0].IsString()){
 		Napi::TypeError::New(env, "Expected 1 Parameter(s) to be passed [ String ]")
@@ -638,7 +650,7 @@ Napi::Value init_slave(const Napi::CallbackInfo& info) {
 	}
 
 	if (info.Length() == 2){
-		do_sort_slave = info[1].As<Napi::Boolean>() ? 1 : 0;
+		do_sort_slave = info[1].As<Napi::Boolean>() ? true : false;
 	}
 
 	std::string json_path = info[0].As<Napi::String>();
@@ -750,6 +762,12 @@ void thread_entry(TsfnContext *context) {
 		Napi::Error::Fatal("thread_entry", "PDO entry registration failed!\n");
 		exit(EXIT_FAILURE);
 	}
+
+#ifdef DEBUG
+	for(uint8_t _idx = 0; _idx < IOs_length; _idx++){
+		printf("\t > Domain %3d : Slave%2d 0x%04x:%02x offset %2d\n", _idx, IOs[_idx].position, IOs[_idx].index, IOs[_idx].subindex, IOs[_idx].offset);
+	}
+#endif
 
 #ifdef DEBUG
 	fprintf(stdout, "\nActivating master...\n");
