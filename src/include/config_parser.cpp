@@ -1,6 +1,12 @@
 #include <algorithm>
 #include "config_parser.h"
 
+off_t get_filesize(const char *);
+std::string normalize_hex_string(std::string);
+uint32_t _to_uint(const rapidjson::Value&);
+uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
+bool _slave_entries_sort_asc(slaveEntry, slaveEntry);
+
 off_t get_filesize(const char *filename) {
     struct stat st;
 
@@ -291,7 +297,10 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 	}
 
 	// sort slave entries asc
-	if(do_sort_slave == 1){
+	if(do_sort_slave){
+#ifdef DEBUG
+	printf("Sorting slave entries...\n");
+#endif
 		std::sort(slave_entries.begin(), slave_entries.end(), _slave_entries_sort_asc);
 	}
 

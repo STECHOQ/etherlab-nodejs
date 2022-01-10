@@ -93,10 +93,6 @@ static const uint8_t SyncMEthercatDirection[] = {
 
 /*****************************************************************************/
 
-off_t get_filesize(const char *);
-std::string normalize_hex_string(std::string);
-uint32_t _to_uint(const rapidjson::Value&);
-uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
 int8_t parse_json(const char *, std::vector<slaveEntry> &,
 					uint8_t *, std::vector<startupConfig> &,
 					uint8_t *, bool do_sort_slave);
