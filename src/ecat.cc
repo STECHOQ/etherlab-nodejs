@@ -337,7 +337,8 @@ int8_t domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_
 					slave_entries[i].direction,
 					slave_entries[i].SWAP_ENDIAN,
 					slave_entries[i].SIGNED,
-					slave_entries[i].writtenValue
+					slave_entries[i].writtenValue,
+					slave_entries[i].WATCHDOG_ENABLED
 				});
 
 			// register domain with IOs
@@ -410,7 +411,7 @@ void syncmanager_startup_config(){
 			// reset last SM index when encountering new slave
 			last_syncM_index = -1;
 
-			direction = slave_entries[i].direction % 2 ? EC_DIR_OUTPUT : EC_DIR_INPUT;
+			direction = (ec_direction_t) slave_entries[i].direction;
 			watchdog_mode = slave_entries[i].WATCHDOG_ENABLED ? EC_WD_ENABLE : EC_WD_DISABLE;
 			current_position = slave_entries[i].position;
 
@@ -588,16 +589,24 @@ void startup_parameters_config(){
 }
 
 void reset_global_vars(void){
+	IOs.clear();
+	IOs.shrink_to_fit();
 	IOs_length = 0;
+
+	slaves.clear();
+	slaves.shrink_to_fit ();
 	slaves_length = 0;
+
+	slave_entries.clear();
+	slave_entries.shrink_to_fit ();
 	slave_entries_length = 0;
+
+	startup_parameters.clear();
+	startup_parameters.shrink_to_fit ();
 	startup_parameters_length = 0;
 
-	IOs.clear();
-	slaves.clear();
-	slave_entries.clear();
-	startup_parameters.clear();
 	sc_slaves.clear();
+	sc_slaves.shrink_to_fit ();
 }
 
 /****************************************************************************/
@@ -870,7 +879,11 @@ Napi::Value stop(const Napi::CallbackInfo& info) {
 Napi::Value write_index(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if(!check_is_operational()){
+	// don't execute when main task is not running
+	if(!check_is_operational()
+		|| _running_state != 1
+		|| IOs_length <= 0){
+
 		return Napi::Number::New(env, -1);
 	}
 
