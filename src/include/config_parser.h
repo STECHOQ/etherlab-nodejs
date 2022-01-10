@@ -99,5 +99,4 @@ uint32_t _to_uint(const rapidjson::Value&);
 uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
 int8_t parse_json(const char *, std::vector<slaveEntry> &,
 					uint8_t *, std::vector<startupConfig> &,
-					uint8_t *, uint8_t do_sort_slave);
-int32_t _slave_entries_sort_asc(const void *, const void *);
+					uint8_t *, bool do_sort_slave);
