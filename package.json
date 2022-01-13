@@ -1,6 +1,6 @@
 {
 	"name": "etherlab-nodejs",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Bind Etherlab's ethercat master to node.js",
 	"main": "lib/ecat.lib.js",
 	"bin": {
@@ -9,8 +9,7 @@
 	},
 	"scripts": {
 		"preinstall": "rm -rf build/",
-		"postinstall": "node-gyp rebuild",
-		"build_debug": "export BUILD_TARGET=\"DEBUG\" && npm install"
+		"postinstall": "node-gyp rebuild"
 	},
 	"repository": {
 		"type": "git",
