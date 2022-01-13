@@ -87,7 +87,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 	/* ************************************ */
 
-	for (uint8_t i_slaves = 0, crnt_idx_slaves = -1; i_slaves < document.Size(); i_slaves++){
+	for (uint8_t i_slaves = 0; i_slaves < document.Size(); i_slaves++){
 		rapidjson::Value m_slaves = document[i_slaves].GetObject();
 
 		assert(m_slaves.HasMember("alias"));
@@ -102,7 +102,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 		// add new slave entry if slave doesnt have syncs
 		if(!member_is_valid_array(m_slaves, "syncs")){
-			crnt_idx_slaves = (*slave_length)++;
+			(*slave_length)++;
 
 			slave_entries.push_back({
 					alias,
@@ -136,7 +136,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 			assert(m_syncs.HasMember("pdos"));
 			assert(m_syncs["pdos"].IsArray());
 
-			uint16_t sync_index = _to_uint(m_syncs["index"]);
+			uint8_t sync_index = _to_uint(m_syncs["index"]);
 			uint8_t watchdog_enabled = 0;
 			uint8_t direction = SyncMEthercatDirection[sync_index];
 
@@ -174,7 +174,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 				// add new slave entry if sync doesnt have pdo entries
 				if(!member_is_valid_array(m_pdos, "entries")){
-					crnt_idx_slaves = (*slave_length)++;
+					(*slave_length)++;
 
 					slave_entries.push_back({
 							alias,
@@ -238,7 +238,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 					}
 
 					// add new slave entry
-					crnt_idx_slaves = (*slave_length)++;
+					(*slave_length)++;
 
 					slave_entries.push_back({
 							alias,
@@ -281,8 +281,6 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 				uint8_t p_subindex = _to_uint(m_parameters["subindex"]);
 				uint8_t p_size = _to_uint(m_parameters["size"]);
 				uint32_t p_value = _to_uint(m_parameters["value"]);
-
-				uint8_t crnt_idx_parameters = (*parameters_length)++;
 
 				slave_parameters.push_back({
 						p_size,

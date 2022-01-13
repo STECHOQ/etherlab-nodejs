@@ -380,10 +380,8 @@ void syncmanager_startup_config(){
 	uint8_t i;
 
 	uint16_t last_position = -1,
-		last_pdo_index = -1,
-		last_index = -1;
+		last_pdo_index = -1;
 	uint32_t last_index_sub_size = -1;
-	uint8_t last_subindex = -1;
 
 	uint8_t syncM_index = 0, last_syncM_index = -1;
 	ec_direction_t direction;
@@ -392,7 +390,6 @@ void syncmanager_startup_config(){
 	uint16_t current_position = -1,
 		current_pdo_index = -1,
 		current_index = -1;
-	uint32_t current_index_sub_size = -1;
 	uint8_t current_subindex = -1;
 
 	uint32_t processed_index_sub_size = -1;
@@ -460,7 +457,6 @@ void syncmanager_startup_config(){
 		if(last_index_sub_size != processed_index_sub_size && processed_index_sub_size){
 			current_index = slave_entries[i].index;
 			current_subindex = slave_entries[i].subindex;
-			current_index_sub_size = processed_index_sub_size;
 
 #ifdef DEBUG
 			printf("add PDO mapping                      : Slave%2d SM%d 0x%4x 0x%04x:%02x %2d\n", current_position, syncM_index, current_pdo_index, current_index, current_subindex, slave_entries[i].size);
@@ -478,9 +474,6 @@ void syncmanager_startup_config(){
 				fprintf(stderr, "Failed to add PDO mapping. Slave%2d SM%d 0x%4x 0x%04x:0x%02x %2d\n", current_position, syncM_index, current_pdo_index, current_index, current_subindex, slave_entries[i].size);
 				exit(EXIT_FAILURE);
 			}
-
-			last_index = current_index;
-			last_subindex = current_subindex;
 
 			last_index_sub_size = _convert_index_sub_size(slave_entries[i].index, slave_entries[i].subindex, slave_entries[i].size);
 		}
