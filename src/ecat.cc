@@ -602,23 +602,18 @@ void startup_parameters_config(){
 
 void reset_global_vars(void){
 	IOs.clear();
-	IOs.shrink_to_fit();
 	IOs_length = 0;
 
 	slaves.clear();
-	slaves.shrink_to_fit ();
 	slaves_length = 0;
 
 	slave_entries.clear();
-	slave_entries.shrink_to_fit ();
 	slave_entries_length = 0;
 
 	startup_parameters.clear();
-	startup_parameters.shrink_to_fit ();
 	startup_parameters_length = 0;
 
 	sc_slaves.clear();
-	sc_slaves.shrink_to_fit ();
 }
 
 /****************************************************************************/
