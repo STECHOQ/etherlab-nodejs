@@ -1,7 +1,4 @@
 {
-	"variables": {
-		"buildtarget": "<!(node -p \"'$BUILD_TARGET'\")"
-	},
 	"targets": [{
 		"target_name": "ecat",
 		"include_dirs": [
@@ -22,47 +19,23 @@
 				"/usr/local/lib/"
 			]
 		},
-		"conditions":[
-			[
-				"buildtarget!='DEBUG'", {
-					"cflags": [
-						"-fexceptions",
-						"-lstdc++",
-						"-Iinclude",
-						"-g",
-						"-Og",
-						"-lpthread"
-					],
-					"cflags_cc": [
-						"-fexceptions",
-						"-lstdc++",
-						"-Iinclude",
-						"-g",
-						"-Og",
-						"-lpthread"
-					]
-				},
-				"buildtarget=='DEBUG'", {
-					"cflags": [
-						"-DDEBUG",
-						"-fexceptions",
-						"-lstdc++",
-						"-Iinclude",
-						"-g",
-						"-Og",
-						"-lpthread"
-					],
-					"cflags_cc": [
-						"-DDEBUG",
-						"-fexceptions",
-						"-lstdc++",
-						"-Iinclude",
-						"-g",
-						"-Og",
-						"-lpthread"
-					]
-				}
-			]
+		"cflags": [
+			"-std=c++11",
+			"-fexceptions",
+			"-lstdc++",
+			"-Iinclude",
+			"-g",
+			"-Ofast",
+			"-lpthread"
+		],
+		"cflags_cc": [
+			"-std=c++11",
+			"-fexceptions",
+			"-lstdc++",
+			"-Iinclude",
+			"-g",
+			"-Ofast",
+			"-lpthread"
 		],
 		"defines": [ 'NAPI_DISABLE_CPP_EXCEPTIONS' ]
 	}]
