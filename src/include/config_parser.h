@@ -2,15 +2,15 @@
 #define CONFIG_PARSER_H
 #endif
 
-#include "rapidjson/document.h"
-
-#include "structs_declaration.h"
-
 #include <cstdio>
 #include <cstdint>
 #include <cctype>
+#include <vector>
 
 #include <sys/stat.h>
+
+#include "rapidjson/document.h"
+#include "ecrt.h"
 
 #define swap_endian16(x) \
 		((uint16_t)( \
@@ -35,6 +35,55 @@
 
 #define mask(n) ((1<<n)-1)
 
+/*****************************************************************************/
+
+typedef struct slaveConfig{
+	uint16_t alias; /**< Slave alias address. */
+	uint16_t position; /**< Slave position. */
+	uint32_t vendor_id; /**< Slave vendor ID. */
+	uint32_t product_code; /**< Slave product code. */
+	ec_slave_config_state_t state;
+} slaveConfig;
+
+typedef struct startupConfig{
+	uint8_t size;
+	uint8_t slavePosition;
+	uint16_t index;
+	uint8_t subindex;
+	uint32_t value;
+} startupConfig;
+
+typedef struct slaveEntry{
+	uint16_t alias; /**< Slave alias address. */
+	uint16_t position; /**< Slave position. */
+	uint32_t vendor_id; /**< Slave vendor ID. */
+	uint32_t product_code; /**< Slave product code. */
+
+	uint8_t sync_index; /**< SM index. */
+	uint16_t pdo_index; /**< PDO entry index. */
+
+	uint16_t index; /**< PDO entry index. */
+	uint8_t subindex; /**< PDO entry subindex. */
+	uint8_t size;
+
+	uint8_t add_to_domain;
+
+	uint32_t offset;
+	uint32_t bit_position;
+
+	uint32_t value;
+	uint8_t direction;
+
+	uint8_t SWAP_ENDIAN;
+	uint8_t SIGNED;
+
+	uint32_t writtenValue;
+
+	uint8_t WATCHDOG_ENABLED;
+} slaveEntry;
+
+/*****************************************************************************/
+
 static const uint8_t SyncMEthercatDirection[] = {
 		1, // SM0 EC_DIR_OUTPUT
 		2, // SM1 EC_DIR_INPUT
@@ -42,9 +91,8 @@ static const uint8_t SyncMEthercatDirection[] = {
 		2  // SM3 EC_DIR_INPUT
 	};
 
-off_t get_filesize(const char *);
-std::string normalize_hex_string(std::string);
-uint32_t _to_uint(const rapidjson::Value&);
-uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
-int8_t parse_json(const char *, slaveEntry **, uint8_t *, startupConfig **, uint8_t *, uint8_t );
-int32_t _slave_entries_sort_asc(const void *, const void *);
+/*****************************************************************************/
+
+int8_t parse_json(const char *, std::vector<slaveEntry> &,
+					uint8_t *, std::vector<startupConfig> &,
+					uint8_t *, bool do_sort_slave);
