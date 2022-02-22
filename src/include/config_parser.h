@@ -94,5 +94,5 @@ static const uint8_t SyncMEthercatDirection[] = {
 /*****************************************************************************/
 
 int8_t parse_json(const char *, std::vector<slaveEntry> &,
-					uint8_t *, std::vector<startupConfig> &,
-					uint8_t *, bool do_sort_slave);
+					uint16_t *, std::vector<startupConfig> &,
+					uint16_t *, bool do_sort_slave);

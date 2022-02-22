@@ -57,16 +57,16 @@ static int8_t _running_state = -1;
 static std::vector<ec_slave_config_t*> sc_slaves;
 
 static std::vector<slaveConfig> slaves;
-static uint8_t slaves_length = 0;
+static uint16_t slaves_length = 0;
 
 static std::vector<slaveEntry> IOs;
-static uint8_t IOs_length = 0;
+static uint16_t IOs_length = 0;
 
 static std::vector<slaveEntry> slave_entries;
-static uint8_t slave_entries_length = 0;
+static uint16_t slave_entries_length = 0;
 
 static std::vector<startupConfig> startup_parameters;
-static uint8_t startup_parameters_length = 0;
+static uint16_t startup_parameters_length = 0;
 
 static uint16_t FREQUENCY = 1000;
 static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
@@ -141,7 +141,7 @@ void check_master_state(ec_master_t *master){
 }
 
 void check_slave_config_states(void){
-	for(uint8_t slNumber = 0; slNumber < slaves_length; slNumber++){
+	for(uint16_t slNumber = 0; slNumber < slaves_length; slNumber++){
 		ec_slave_config_state_t s;
 
 		ecrt_slave_config_state(sc_slaves[slNumber], &s);
@@ -185,7 +185,7 @@ void check_slave_config_states(void){
 /*****************************************************************************/
 
 uint8_t check_is_operational(){
-	for(uint8_t slNumber = 0; slNumber < slaves_length; slNumber++){
+	for(uint16_t slNumber = 0; slNumber < slaves_length; slNumber++){
 		if(!slaves[slNumber].state.operational){
 			return 0;
 		}
@@ -194,7 +194,7 @@ uint8_t check_is_operational(){
 	return 1;
 }
 
-int8_t write_output_value(uint8_t index, uint32_t value, uint8_t SIGNED){
+int8_t write_output_value(uint16_t index, uint32_t value, uint8_t SIGNED){
 	// selected index is not output, return immediately
 	if(IOs[index].direction != EC_DIR_OUTPUT){
 		return -1;
@@ -241,7 +241,7 @@ int8_t write_output_value(uint8_t index, uint32_t value, uint8_t SIGNED){
 
 /*****************************************************************************/
 
-void cyclic_task(ec_master_t *master, uint8_t length){
+void cyclic_task(ec_master_t *master, uint16_t length){
 	// receive process data
 	ecrt_master_receive(master);
 	ecrt_domain_process(DomainN);
@@ -277,7 +277,7 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 		uint16_t tmp16;
 		uint32_t tmp32;
 
-		for(uint8_t index = 0; index < length; index++){
+		for(uint16_t index = 0; index < length; index++){
 			if(IOs[index].direction == EC_DIR_OUTPUT){
 				write_output_value(
 						index,
@@ -340,14 +340,14 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 	ecrt_master_send(master);
 }
 
-int8_t domain_startup_config(
-				ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_length){
+int16_t domain_startup_config(
+				ec_pdo_entry_reg_t **DomainN_regs, int16_t *DomainN_length){
 #ifdef DEBUG
 	fprintf(stdout, "\nConfiguring Domain...\n");
 #endif
 
-	uint8_t length = slave_entries_length;
-	uint8_t i, index;
+	uint16_t length = slave_entries_length;
+	uint16_t i, index;
 	size_t size;
 
 	if((*DomainN_length) == 0){
@@ -437,8 +437,8 @@ void syncmanager_startup_config(){
 	fprintf(stdout, "\nConfiguring SyncManager and Mapping PDOs...\n");
 #endif
 
-	uint8_t length = slave_entries_length;
-	uint8_t i;
+	uint16_t length = slave_entries_length;
+	uint16_t i;
 
 	uint16_t last_position = -1,
 		last_pdo_index = -1;
@@ -583,9 +583,9 @@ void syncmanager_startup_config(){
 }
 
 uint8_t _skip_current_slave_position(uint16_t position,
-										std::vector<uint8_t>& last_positions){
+										std::vector<uint16_t>& last_positions){
 
-	for(uint8_t sl_index = 0; sl_index < last_positions.size(); sl_index++){
+	for(uint16_t sl_index = 0; sl_index < last_positions.size(); sl_index++){
 		if(position == last_positions[sl_index]){
 			return 1;
 			break;
@@ -600,10 +600,10 @@ void slave_startup_config(ec_master_t *master){
 	fprintf(stdout, "\nConfiguring Slaves...\n");
 #endif
 
-	uint8_t length = slave_entries_length;
-	std::vector<uint8_t> last_positions;
+	uint16_t length = slave_entries_length;
+	std::vector<uint16_t> last_positions;
 
-	for(uint8_t i = 0; i < length; i++){
+	for(uint16_t i = 0; i < length; i++){
 		// skip current slave, if it's already configured
 		if(_skip_current_slave_position(
 								slave_entries[i].position,
@@ -657,7 +657,7 @@ void startup_parameters_config(){
 	fprintf(stdout, "\nConfiguring Startup Parameters...\n");
 #endif
 
-	static uint8_t length = startup_parameters_length;
+	static uint16_t length = startup_parameters_length;
 	for(int idx = 0; idx < length; idx++){
 		switch(startup_parameters[idx].size){
 			case 8:
@@ -807,7 +807,7 @@ void thread_entry(TsfnContext *context) {
 	auto callback = [](Napi::Env env, Napi::Function jsCallback, int8_t* data) {
 		Napi::Array values = Napi::Array::New(env, IOs_length);
 
-		for(uint8_t index = 0; index < IOs_length; index++){
+		for(uint16_t index = 0; index < IOs_length; index++){
 			Napi::Object indexValue = Napi::Object::New(env);
 			indexValue.Set("position", Napi::Value::From(env, IOs[index].position));
 			indexValue.Set("index", Napi::Value::From(env, IOs[index].index));
@@ -828,7 +828,7 @@ void thread_entry(TsfnContext *context) {
 	ec_pdo_entry_reg_t *DomainN_regs = NULL;
 	ec_master_t *master = NULL;
 
-	int8_t DomainN_length;
+	int16_t DomainN_length;
 	int8_t ret = 0;
 
 #ifdef DEBUG
@@ -1064,7 +1064,7 @@ Napi::Promise get_allocated_domain(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Array _domains = Napi::Array::New(env, IOs_length);
-	for(uint8_t index = 0; index < IOs_length; index++){
+	for(uint16_t index = 0; index < IOs_length; index++){
 		Napi::Object item = Napi::Object::New(env);
 		item.Set("position", Napi::Value::From(env, IOs[index].position));
 		item.Set("vendorId", Napi::Value::From(env, IOs[index].vendor_id));
@@ -1105,7 +1105,7 @@ Napi::Promise get_domain_values(const Napi::CallbackInfo& info){
 
 	Napi::Array values = Napi::Array::New(env, IOs_length);
 
-	for(uint8_t index = 0; index < IOs_length; index++){
+	for(uint16_t index = 0; index < IOs_length; index++){
 		Napi::Object indexValue = Napi::Object::New(env);
 		indexValue.Set("position", Napi::Value::From(env, IOs[index].position));
 		indexValue.Set("index", Napi::Value::From(env, IOs[index].index));

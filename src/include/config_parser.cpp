@@ -74,8 +74,8 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 }
 
 int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entries,
-					uint8_t *slave_length, std::vector<startupConfig> &slave_parameters,
-					uint8_t *parameters_length, bool do_sort_slave){
+					uint16_t *slave_length, std::vector<startupConfig> &slave_parameters,
+					uint16_t *parameters_length, bool do_sort_slave){
 
 	rapidjson::Document document;
 	document.Parse(json_string);
@@ -87,7 +87,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 	/* ************************************ */
 
-	for (uint8_t i_slaves = 0; i_slaves < document.Size(); i_slaves++){
+	for (uint16_t i_slaves = 0; i_slaves < document.Size(); i_slaves++){
 		rapidjson::Value m_slaves = document[i_slaves].GetObject();
 
 		assert(m_slaves.HasMember("alias"));
@@ -130,7 +130,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 		assert(m_slaves["syncs"].IsArray());
 
-		for(uint8_t i_syncs = 0; i_syncs < m_slaves["syncs"].Size(); i_syncs++){
+		for(uint16_t i_syncs = 0; i_syncs < m_slaves["syncs"].Size(); i_syncs++){
 			rapidjson::Value m_syncs = m_slaves["syncs"][i_syncs].GetObject();
 			assert(m_syncs.HasMember("index"));
 			assert(m_syncs.HasMember("pdos"));
@@ -164,9 +164,9 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 			}
 
 			rapidjson::Value arr_pdos = m_syncs["pdos"].GetArray();
-			uint8_t size_arr_pdos = arr_pdos.Size();
+			uint16_t size_arr_pdos = arr_pdos.Size();
 
-			for(uint8_t i_pdos = 0; i_pdos < size_arr_pdos; i_pdos++){
+			for(uint16_t i_pdos = 0; i_pdos < size_arr_pdos; i_pdos++){
 				rapidjson::Value m_pdos = arr_pdos[i_pdos].GetObject();
 				assert(m_pdos.HasMember("index"));
 
@@ -201,9 +201,9 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 				}
 
 				rapidjson::Value arr_entries = m_pdos["entries"].GetArray();
-				uint8_t size_arr_entries = arr_entries.Size();
+				uint16_t size_arr_entries = arr_entries.Size();
 
-				for(uint8_t i_entries = 0; i_entries < size_arr_entries; i_entries++){
+				for(uint16_t i_entries = 0; i_entries < size_arr_entries; i_entries++){
 					rapidjson::Value m_entries = arr_entries[i_entries].GetObject();
 
 					assert(m_entries.HasMember("index"));
@@ -270,7 +270,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 		if(member_is_valid_array(m_slaves, "parameters")){
 			assert(m_slaves["parameters"].IsArray());
 
-			for(uint8_t i_parameters = 0; i_parameters < m_slaves["parameters"].Size(); i_parameters++){
+			for(uint16_t i_parameters = 0; i_parameters < m_slaves["parameters"].Size(); i_parameters++){
 				rapidjson::Value m_parameters = m_slaves["parameters"][i_parameters].GetObject();
 				assert(m_parameters.HasMember("index"));
 				assert(m_parameters.HasMember("subindex"));
