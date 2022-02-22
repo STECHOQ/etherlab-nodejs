@@ -1,4 +1,11 @@
+#include <algorithm>
 #include "config_parser.h"
+
+off_t get_filesize(const char *);
+std::string normalize_hex_string(std::string);
+uint32_t _to_uint(const rapidjson::Value&);
+uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
+bool _slave_entries_sort_asc(slaveEntry, slaveEntry);
 
 off_t get_filesize(const char *filename) {
     struct stat st;
@@ -22,6 +29,30 @@ std::string normalize_hex_string(std::string str){
 	return output;
 }
 
+bool _slave_entries_sort_asc(slaveEntry p1, slaveEntry p2){
+	// sort by position, pdo_index, index, then subindex
+	if(p1.position < p2.position){
+		return true;
+	}
+
+	bool c_position = p1.position == p2.position;
+	if(c_position && p1.pdo_index < p2.pdo_index){
+		return true;
+	}
+
+	bool c_pdo_index = c_position && p1.pdo_index == p2.pdo_index;
+	if(c_pdo_index && p1.index < p2.index && (p1.index && p2.index)){
+		return true;
+	}
+
+	bool c_index = c_pdo_index && p1.index == p2.index && (p1.index && p2.index);
+	if(c_index && p1.subindex < p2.subindex && (p1.subindex && p2.subindex)){
+		return true;
+	}
+
+	return false;
+}
+
 uint32_t _to_uint(const rapidjson::Value& val){
 	if(val.IsString()){
 		return std::stoi(normalize_hex_string(val.GetString()), 0, 16);
@@ -42,46 +73,21 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 	return doc[name].Size() > 0 ? 1 : 0;
 }
 
-int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t *slave_length,
-					startupConfig **slave_parameters, uint8_t *parameters_length,
-					uint8_t do_sort_slave){
-
-	const off_t filesize = get_filesize(filename);
-
-	if(filesize == -1){
-		fprintf(stderr, "filesize error : %s\n", filename);
-		return filesize;
-	}
-
-	FILE *fp = fopen(filename, "r");
-
-	if(fp == NULL){
-		fprintf(stderr, "File is not accessible : %s", filename);
-		return -1;
-	}
-
-	char readBuffer[filesize];
-	rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entries,
+					uint8_t *slave_length, std::vector<startupConfig> &slave_parameters,
+					uint8_t *parameters_length, bool do_sort_slave){
 
 	rapidjson::Document document;
-	document.ParseStream(is);
+	document.Parse(json_string);
 
-	fclose(fp);
 	assert(document.IsArray());
 
-	/* allocate memory if length is still 0 */
-	if(*slave_length == 0){
-		*slave_entries = (slaveEntry*) malloc(sizeof(slaveEntry));
-	}
 	*slave_length = 0;
-
-	if(*parameters_length == 0){
-		*slave_parameters = (startupConfig*) malloc(sizeof(startupConfig));
-	}
 	*parameters_length = 0;
+
 	/* ************************************ */
 
-	for (uint8_t i_slaves = 0, crnt_idx_slaves = -1; i_slaves < document.Size(); i_slaves++){
+	for (uint8_t i_slaves = 0; i_slaves < document.Size(); i_slaves++){
 		rapidjson::Value m_slaves = document[i_slaves].GetObject();
 
 		assert(m_slaves.HasMember("alias"));
@@ -96,11 +102,9 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 
 		// add new slave entry if slave doesnt have syncs
 		if(!member_is_valid_array(m_slaves, "syncs")){
-			crnt_idx_slaves = (*slave_length)++;
+			(*slave_length)++;
 
-			*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-			(*slave_entries)[crnt_idx_slaves] = {
+			slave_entries.push_back({
 					alias,
 					position,
 					vendor_id,
@@ -119,7 +123,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 					0,
 					0,
 					0
-				};
+				});
 
 			continue;
 		}
@@ -132,7 +136,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 			assert(m_syncs.HasMember("pdos"));
 			assert(m_syncs["pdos"].IsArray());
 
-			uint16_t sync_index = _to_uint(m_syncs["index"]);
+			uint8_t sync_index = _to_uint(m_syncs["index"]);
 			uint8_t watchdog_enabled = 0;
 			uint8_t direction = SyncMEthercatDirection[sync_index];
 
@@ -170,11 +174,9 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 
 				// add new slave entry if sync doesnt have pdo entries
 				if(!member_is_valid_array(m_pdos, "entries")){
-					crnt_idx_slaves = (*slave_length)++;
+					(*slave_length)++;
 
-					*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-					(*slave_entries)[crnt_idx_slaves] = {
+					slave_entries.push_back({
 							alias,
 							position,
 							vendor_id,
@@ -193,7 +195,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 							0,
 							0,
 							0
-						};
+						});
 
 					continue;
 				}
@@ -236,11 +238,9 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 					}
 
 					// add new slave entry
-					crnt_idx_slaves = (*slave_length)++;
+					(*slave_length)++;
 
-					*slave_entries = (slaveEntry*) realloc(*slave_entries, (*slave_length) * sizeof(slaveEntry));
-
-					(*slave_entries)[crnt_idx_slaves] = {
+					slave_entries.push_back({
 							alias,
 							position,
 							vendor_id,
@@ -259,7 +259,7 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 							entry_signed,
 							0,
 							watchdog_enabled
-						};
+						});
 				}
 
 			}
@@ -282,24 +282,24 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 				uint8_t p_size = _to_uint(m_parameters["size"]);
 				uint32_t p_value = _to_uint(m_parameters["value"]);
 
-				uint8_t crnt_idx_parameters = (*parameters_length)++;
-				*slave_parameters = (startupConfig*) realloc(*slave_parameters, (*parameters_length) * sizeof(startupConfig));
-
-				(*slave_parameters)[crnt_idx_parameters] = {
+				slave_parameters.push_back({
 						p_size,
 						(uint8_t) position,
 						p_index,
 						p_subindex,
 						p_value
-					};
+					});
 			}
 		}
 
 	}
 
 	// sort slave entries asc
-	if(do_sort_slave == 1){
-		qsort(*slave_entries, *slave_length, sizeof(slaveEntry), _slave_entries_sort_asc);
+	if(do_sort_slave){
+#ifdef DEBUG
+	printf("Sorting slave entries...\n");
+#endif
+		std::sort(slave_entries.begin(), slave_entries.end(), _slave_entries_sort_asc);
 	}
 
 #ifdef DEBUG
@@ -307,34 +307,4 @@ int8_t parse_json_file(const char *filename, slaveEntry **slave_entries, uint8_t
 #endif
 
 	return 0;
-}
-
-int32_t _slave_entries_sort_asc(const void *aptr, const void *bptr){
-	const slaveEntry *p1 = (slaveEntry *)aptr;
-	const slaveEntry *p2 = (slaveEntry *)bptr;
-
-	// sort by position, pdo_index, index, then subindex
-	if(p1->position > p2->position){
-		return 1;
-	} else if(p1->position < p2->position){
-		return -1;
-	} else if(p1->pdo_index > p2->pdo_index){
-		return 1;
-	} else if(p1->pdo_index < p2->pdo_index){
-		return -1;
-	} else if(p1->index > p2->index && (p1->index && p2->index)){
-		return 1;
-	} else if(p1->index < p2->index && (p1->index && p2->index)){
-		return -1;
-	} else if(p1->subindex > p2->subindex && (p1->subindex && p2->subindex)){
-		return 1;
-	} else if(p1->subindex < p2->subindex && (p1->subindex && p2->subindex)){
-		return -1;
-	} else if(p1->direction > p2->direction){
-		return 1;
-	} else if(p1->direction < p2->direction){
-		return -1;
-	} else {
-		return 0;
-	}
 }
