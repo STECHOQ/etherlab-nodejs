@@ -270,7 +270,8 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 		if(member_is_valid_array(m_slaves, "parameters")){
 			assert(m_slaves["parameters"].IsArray());
 
-			for(uint8_t i_parameters = 0; i_parameters < m_slaves["parameters"].Size(); i_parameters++){
+			*parameters_length = m_slaves["parameters"].Size();
+			for(uint8_t i_parameters = 0; i_parameters < *parameters_length; i_parameters++){
 				rapidjson::Value m_parameters = m_slaves["parameters"][i_parameters].GetObject();
 				assert(m_parameters.HasMember("index"));
 				assert(m_parameters.HasMember("subindex"));
