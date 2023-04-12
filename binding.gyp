@@ -24,8 +24,7 @@
 			"-fexceptions",
 			"-lstdc++",
 			"-Iinclude",
-			"-g",
-			"-Ofast",
+			"-O2",
 			"-lpthread"
 		],
 		"cflags_cc": [
@@ -33,8 +32,7 @@
 			"-fexceptions",
 			"-lstdc++",
 			"-Iinclude",
-			"-g",
-			"-Ofast",
+			"-O2",
 			"-lpthread"
 		],
 		"defines": [ 'NAPI_DISABLE_CPP_EXCEPTIONS' ]
