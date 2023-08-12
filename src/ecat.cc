@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <signal.h>
-#include <stdio.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -9,9 +8,12 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#include <cstdio>
+#include <stdexcept>
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <map>
 
 #include <napi.h>
 
@@ -24,7 +26,9 @@
 									 faulting */
 
 /** Task period in ns. */
+#ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
+#endif
 
 #define AL_BIT_INIT 0
 #define AL_BIT_PREOP 1
@@ -68,6 +72,16 @@ static uint8_t slave_entries_length = 0;
 static std::vector<startupConfig> startup_parameters;
 static uint8_t startup_parameters_length = 0;
 
+// SM startup config
+inline static uint32_t _convert_index_sub_size(uint16_t index, uint8_t subindex, uint8_t size);
+
+// mapped domain
+static std::map<uint32_t, uint32_t> mapped_domains;
+inline static uint32_t _convert_pos_index_sub(const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex);
+static int8_t get_domain_index(uint32_t* index, const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex);
+void assign_domain_identifier();
+
+// Periodic task timing
 static uint16_t FREQUENCY = 1000;
 static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 
@@ -775,6 +789,81 @@ void _wait_period(struct timespec * wakeup_time){
 	}
 }
 
+void assign_domain_identifier(){
+#ifdef DEBUG
+	printf("\nAssigning Domain identifier...\n");
+#endif
+
+	for (uint8_t domain_index = 0; domain_index < IOs_length; domain_index++){
+		uint32_t identifier = _convert_pos_index_sub(
+				IOs[domain_index].position,
+				IOs[domain_index].index,
+				IOs[domain_index].subindex
+			);
+
+		mapped_domains[identifier] = domain_index;
+
+#ifdef DEBUG
+		printf("DOMAIN Pos %2d 0x%04x:%02x : %x index %d\n", IOs[domain_index].position,
+				IOs[domain_index].index,
+				IOs[domain_index].subindex,
+				identifier,
+				mapped_domains[identifier]);
+#endif
+	}
+}
+
+inline static uint32_t _convert_pos_index_sub(const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex){
+	return (s_position << 24) | (s_index << 8) | (s_subindex << 0);
+}
+
+static int8_t get_domain_index(uint32_t* index, const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex){
+	uint32_t key = _convert_pos_index_sub(s_position, s_index, s_subindex);
+
+	try {
+		*index = mapped_domains.at(key);
+		return 0;
+	} catch (const std::out_of_range& err) {
+		fprintf(stderr, "Error %s: Index not found for pos %2d 0x%04x:%02x\n",
+			err.what(),
+			s_position,
+			s_index,
+			s_subindex);
+
+		return -1;
+	}
+}
+
+int8_t write_domain(const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex, const uint32_t& value){
+	if(!check_is_operational()){
+		return -1;
+	}
+
+	uint32_t index;
+	if(get_domain_index(&index, s_position, s_index, s_subindex) < 0){
+		return -1;
+	}
+
+	IOs[index].writtenValue = value;
+
+	return 0;
+}
+
+int8_t read_domain(const uint8_t& s_position, const uint16_t& s_index, const uint8_t& s_subindex, uint32_t* value){
+	if(!check_is_operational()){
+		return -1;
+	}
+
+	uint32_t index;
+	if(get_domain_index(&index, s_position, s_index, s_subindex) < 0){
+		return -1;
+	}
+
+	*value = IOs[index].value;
+
+	return 0;
+}
+
 /****************************************************************************/
 // Data structure representing our thread-safe function context.
 struct TsfnContext {
@@ -939,6 +1028,9 @@ void thread_entry(TsfnContext *context) {
 	// free allocated memories from startup configurations
 	free(DomainN_regs);
 
+	// map domain indexes
+	assign_domain_identifier();
+
 	_running_state = 1;
 
 	while (1) {
@@ -1014,6 +1106,17 @@ Napi::Value set_frequency(const Napi::CallbackInfo& info) {
 	return Napi::Number::New(env, PERIOD_NS);
 }
 
+Napi::Value set_period_us(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+	uint32_t period_us = info[0].As<Napi::Number>();
+
+	PERIOD_NS = period_us * 1000;
+	FREQUENCY = NSEC_PER_SEC / (float(period_us) * 1000);
+
+	return Napi::Number::New(env, PERIOD_NS);
+}
+
 Napi::Value get_operational_status(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
@@ -1044,6 +1147,82 @@ Napi::Value write_index(const Napi::CallbackInfo& info) {
 	IOs[index].writtenValue = value;
 
 	return Napi::Number::New(env, IOs[index].writtenValue);
+}
+
+Napi::Value js_write_by_key(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+	// don't execute when main task is not running
+	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
+		|| _running_state != 1
+		|| IOs_length <= 0
+	){
+		return env.Null();
+	}
+
+	uint8_t pos = info[0].As<Napi::Number>().Uint32Value();
+	uint16_t index = info[1].As<Napi::Number>().Uint32Value();
+	uint8_t subindex = info[2].As<Napi::Number>().Uint32Value();
+	uint32_t value = info[3].As<Napi::Number>().Uint32Value();
+
+	if(write_domain(pos, index, subindex, value) < 0){
+		return env.Undefined();
+	}
+
+	return Napi::Boolean::New(env, true);
+}
+
+Napi::Value js_read_by_key(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+	// don't execute when main task is not running
+	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
+		|| _running_state != 1
+		|| IOs_length <= 0
+	){
+		return env.Null();
+	}
+
+	uint8_t pos = info[0].As<Napi::Number>().Uint32Value();
+	uint16_t index = info[1].As<Napi::Number>().Uint32Value();
+	uint8_t subindex = (uint8_t) info[2].As<Napi::Number>().Uint32Value();
+	uint32_t value;
+
+	if(read_domain(pos, index, subindex, &value) < 0){
+		return env.Undefined();
+	}
+
+	return Napi::Number::New(env, value);
+}
+
+Napi::Value js_get_mapped_domains(const Napi::CallbackInfo& info){
+	Napi::Env env = info.Env();
+
+	if(mapped_domains.empty()){
+		return env.Undefined();
+	}
+
+	Napi::Object js_retval = Napi::Object::New(env);
+	uint8_t pos, subindex;
+	uint16_t index;
+	bool do_print = info[0].As<Napi::Boolean>();
+
+	for(auto elem : mapped_domains){
+		pos = (elem.first >> 24) & 0xff;
+		index = (elem.first >> 8) & 0xffff;
+		subindex = (elem.first) & 0xff;
+
+		char tmpstr[30];
+		sprintf(tmpstr, "%d:%04x:%02x", pos, index, subindex);
+		js_retval.Set(tmpstr, Napi::Number::New(env, elem.second));
+
+		if(do_print){
+			fprintf(stdout, "Pos %d at 0x%04x:%02x = %d\n", pos, index,
+				subindex, elem.second);
+		}
+	}
+
+	return js_retval;
 }
 
 Napi::Promise get_allocated_domain(const Napi::CallbackInfo& info) {
@@ -1136,6 +1315,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set(Napi::String::New(env, "getMasterState"), Napi::Function::New(env, get_master_state));
 	exports.Set(Napi::String::New(env, "getDomainValues"), Napi::Function::New(env, get_domain_values));
 	exports.Set(Napi::String::New(env, "setFrequency"), Napi::Function::New(env, set_frequency));
+	exports.Set(Napi::String::New(env, "writeDomain"), Napi::Function::New(env, js_write_by_key));
+	exports.Set(Napi::String::New(env, "readDomain"), Napi::Function::New(env, js_read_by_key));
+	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
 
 	return exports;
 }
