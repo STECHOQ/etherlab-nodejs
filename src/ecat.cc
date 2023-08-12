@@ -85,6 +85,9 @@ void assign_domain_identifier();
 static uint16_t FREQUENCY = 1000;
 static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 
+// SDO Request
+static ec_sdo_request_t *sdo_req;
+
 /*****************************************************************************/
 
 void check_domain_state(void){
@@ -1305,6 +1308,79 @@ Napi::Value get_master_state(const Napi::CallbackInfo& info){
 	return Napi::Number::New(env, master_state.al_states);
 }
 
+void set_sdo_data(const Napi::Env& env, const size_t& size, Napi::Value* value)
+{
+	switch(size){
+		case 1: {
+			*value = Napi::Number::New(env,
+				EC_READ_U8(ecrt_sdo_request_data(sdo_req)));
+		} break;
+
+		case 2: {
+			*value = Napi::Number::New(env,
+				EC_READ_U16(ecrt_sdo_request_data(sdo_req)));
+		} break;
+
+		case 4: {
+			*value = Napi::Number::New(env,
+				EC_READ_U32(ecrt_sdo_request_data(sdo_req)));
+		} break;
+
+		default: {
+			*value = Napi::Number::New(env,
+				EC_READ_U32(ecrt_sdo_request_data(sdo_req)));
+		} break;
+	}
+}
+
+Napi::Value sdo_request_read(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	uint32_t pos = info[0].As<Napi::Number>().Uint32Value();
+	uint16_t index = info[1].As<Napi::Number>().Uint32Value();
+	uint8_t subindex = info[2].As<Napi::Number>().Uint32Value();
+	size_t size = info[3].As<Napi::Number>().Uint32Value();
+	uint32_t timeout = 100;
+
+	if(info.Length() > 4 && info[4].IsNumber()){
+		timeout = info[4].As<Napi::Number>().Uint32Value();
+	}
+
+	Napi::Value result;
+
+	if (!(sdo_req = ecrt_slave_config_create_sdo_request(sc_slaves[pos], index, subindex, size))) {
+		fprintf(stderr, "Failed to create SDO request.\n");
+		return env.Undefined();
+	}
+
+	ecrt_sdo_request_read(sdo_req); // trigger read
+	ecrt_sdo_request_timeout(sdo_req, timeout);
+
+	while(1){
+		switch (ecrt_sdo_request_state(sdo_req)) {
+			case EC_REQUEST_UNUSED: // request was not used yet
+				ecrt_sdo_request_read(sdo_req); // trigger read
+				break;
+
+			case EC_REQUEST_BUSY:
+#if DEBUG > 0
+				fprintf(stdout, "BUSY %d 0x%04x:%02x\n", pos, index, subindex);
+#endif
+				break;
+
+			case EC_REQUEST_SUCCESS: {
+				set_sdo_data(env, size, &result);
+				return result;
+			} break;
+
+			case EC_REQUEST_ERROR:{
+				return env.Undefined();
+			} break;
+		}
+	}
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, init_slave));
 	exports.Set(Napi::String::New(env, "writeIndex"), Napi::Function::New(env, write_index));
@@ -1318,6 +1394,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set(Napi::String::New(env, "writeDomain"), Napi::Function::New(env, js_write_by_key));
 	exports.Set(Napi::String::New(env, "readDomain"), Napi::Function::New(env, js_read_by_key));
 	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
+	exports.Set(Napi::String::New(env, "sdoRead"), Napi::Function::New(env, sdo_request_read));
 
 	return exports;
 }
