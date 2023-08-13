@@ -41,21 +41,25 @@
 
 // EtherCAT
 static ec_master_state_t master_state = {};
+static ec_master_t *master = NULL;
 
 static ec_domain_t *DomainN = NULL;
 static ec_domain_state_t DomainN_state = {};
+static ec_pdo_entry_reg_t *DomainN_regs = NULL;
+static int8_t DomainN_length;
 
 // process data
 static uint8_t *DomainN_pd = NULL;
 
 struct timespec epoch;
 
-#ifdef DEBUG
+#if DEBUG > 0
 struct timespec start, end;
 #endif
 
 static uint32_t counter = 0;
 static int8_t _running_state = -1;
+static int8_t isMasterReady = -1;
 
 // slave configurations
 static std::vector<ec_slave_config_t*> sc_slaves;
@@ -88,6 +92,10 @@ static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 // SDO Request
 static ec_sdo_request_t *sdo_req;
 
+// configuration
+static std::string json_path;
+static bool do_sort_slave;
+
 /*****************************************************************************/
 
 void check_domain_state(void){
@@ -95,7 +103,7 @@ void check_domain_state(void){
 
 	ecrt_domain_state(DomainN, &ds);
 
-#ifdef DEBUG
+#if DEBUG > 0
 	if (ds.working_counter != DomainN_state.working_counter) {
 		timespec_get(&epoch, TIME_UTC);
 		printf("%ld.%09ld | Domain1: WC %u.\n",
@@ -125,7 +133,7 @@ void check_master_state(ec_master_t *master){
 
 	ecrt_master_state(master, &ms);
 
-#ifdef DEBUG
+#if DEBUG > 0
 	if (ms.slaves_responding != master_state.slaves_responding) {
 		timespec_get(&epoch, TIME_UTC);
 		printf("%ld.%09ld | %u slave(s).\n",
@@ -163,7 +171,7 @@ void check_slave_config_states(void){
 
 		ecrt_slave_config_state(sc_slaves[slNumber], &s);
 
-#ifdef DEBUG
+#if DEBUG > 0
 		if (s.al_state != slaves[slNumber].state.al_state) {
 			timespec_get(&epoch, TIME_UTC);
 			printf("%ld.%09ld | Slaves %d : State 0x%02X.\n",
@@ -281,14 +289,14 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 
 	// do nothing if master is not ready
 	if(MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)) {
-#ifdef DEBUG
-		clock_gettime(CLOCK_REALTIME, &end);
+#if DEBUG > 1
+		clock_gettime(CLOCK_MONOTONIC, &end);
 
 		double time_spent = (end.tv_sec - start.tv_sec)
 							+ (end.tv_nsec - start.tv_nsec);
 
 		printf("The elapsed time is %f us\n", time_spent / 1000);
-		clock_gettime(CLOCK_REALTIME, &start);
+		clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
 		uint16_t tmp16;
@@ -340,14 +348,14 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 					break;
 			}
 
-#ifdef DEBUG
-			printf("Index %2d 0x%04x:%02x = %4x\n", index, IOs[index].index,
+#if DEBUG > 1
+			printf("Index %2d 0x%04x:%02x = %04x\n", index, IOs[index].index,
 										IOs[index].subindex, IOs[index].value);
 #endif
 
 		};
 
-#ifdef DEBUG
+#if DEBUG > 1
 		printf("=====================\n");
 #endif
 
@@ -359,7 +367,7 @@ void cyclic_task(ec_master_t *master, uint8_t length){
 
 int8_t domain_startup_config(
 				ec_pdo_entry_reg_t **DomainN_regs, int8_t *DomainN_length){
-#ifdef DEBUG
+#if DEBUG > 0
 	fprintf(stdout, "\nConfiguring Domain...\n");
 #endif
 
@@ -426,7 +434,7 @@ int8_t domain_startup_config(
 					&IOs[index].bit_position
 				};
 
-#ifdef DEBUG
+#if DEBUG > 0
 			printf("Domain %3d : Slave%2d 0x%04x:%02x\n",
 					index,
 					(*DomainN_regs)[index].position,
@@ -450,7 +458,7 @@ uint32_t _convert_index_sub_size(uint16_t index, uint8_t subindex, uint8_t size)
 }
 
 void syncmanager_startup_config(){
-#ifdef DEBUG
+#if DEBUG > 0
 	fprintf(stdout, "\nConfiguring SyncManager and Mapping PDOs...\n");
 #endif
 
@@ -481,7 +489,7 @@ void syncmanager_startup_config(){
 									);
 		syncM_index = slave_entries[i].sync_index;
 
-#ifdef DEBUG
+#if DEBUG > 0
 		printf("\nSlave%2d 0x%04x 0x%08x %02d-bits\n",
 				slave_entries[i].position, slave_entries[i].pdo_index,
 				processed_index_sub_size, slave_entries[i].size);
@@ -499,7 +507,7 @@ void syncmanager_startup_config(){
 						: EC_WD_DISABLE;
 			current_position = slave_entries[i].position;
 
-#ifdef DEBUG
+#if DEBUG > 0
 			printf("config SM                            : Slave%2d SM%d\n",
 												current_position, syncM_index);
 #endif
@@ -524,7 +532,7 @@ void syncmanager_startup_config(){
 							syncM_index
 						);
 
-#ifdef DEBUG
+#if DEBUG > 0
 			printf("clear PDO assign                     : Slave%2d SM%d\n",
 												current_position, syncM_index);
 #endif
@@ -537,7 +545,7 @@ void syncmanager_startup_config(){
 
 			current_pdo_index = slave_entries[i].pdo_index;
 
-#ifdef DEBUG
+#if DEBUG > 0
 			printf("add PDO assign and clear PDO mapping : Slave%2d SM%d 0x%04x\n",
 							current_position, syncM_index, current_pdo_index);
 #endif
@@ -567,7 +575,7 @@ void syncmanager_startup_config(){
 			current_index = slave_entries[i].index;
 			current_subindex = slave_entries[i].subindex;
 
-#ifdef DEBUG
+#if DEBUG > 0
 			printf("add PDO mapping                      : Slave%2d SM%d 0x%4x 0x%04x:%02x %2d\n",
 				current_position, syncM_index, current_pdo_index, current_index,
 									current_subindex, slave_entries[i].size);
@@ -613,7 +621,7 @@ uint8_t _skip_current_slave_position(uint16_t position,
 }
 
 void slave_startup_config(ec_master_t *master){
-#ifdef DEBUG
+#if DEBUG > 0
 	fprintf(stdout, "\nConfiguring Slaves...\n");
 #endif
 
@@ -638,7 +646,7 @@ void slave_startup_config(ec_master_t *master){
 				{}
 			};
 
-#ifdef DEBUG
+#if DEBUG > 0
 		printf("Slave %2d: 0x%08x 0x%08x\n", current.position,
 									current.vendor_id, current.product_code);
 #endif
@@ -661,7 +669,7 @@ void slave_startup_config(ec_master_t *master){
 		// save last slave's position
 		last_positions.push_back(current.position);
 
-#ifdef DEBUG
+#if DEBUG > 0
 		printf("Current: Slave %2d %04x %04x %02x\n",
 			slave_entries[i].position, slave_entries[i].pdo_index,
 			slave_entries[i].index, slave_entries[i].subindex);
@@ -670,7 +678,7 @@ void slave_startup_config(ec_master_t *master){
 }
 
 void startup_parameters_config(){
-#ifdef DEBUG
+#if DEBUG > 0
 	fprintf(stdout, "\nConfiguring Startup Parameters...\n");
 #endif
 
@@ -705,7 +713,7 @@ void startup_parameters_config(){
 				break;
 		}
 
-#ifdef DEBUG
+#if DEBUG > 0
 		printf("Set Startup Parameter Slave%2d, 0x%04x:%02x = 0x%x (%d)\n",
 				startup_parameters[idx].slavePosition,
 				startup_parameters[idx].index,
@@ -741,49 +749,6 @@ void stack_prefault(void){
 	memset(dummy, 0, MAX_SAFE_STACK);
 }
 
-/****************************************************************************/
-
-Napi::Value init_slave(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	bool do_sort_slave = 0;
-
-	if (info.Length() < 1 || !info[0].IsString()){
-		Napi::TypeError::New(
-				env,
-				"Expected 1 Parameter(s) to be passed [ String ]"
-			).ThrowAsJavaScriptException();
-
-		return env.Null();
-	}
-
-	if (slave_entries_length > 0){
-		Napi::TypeError::New(
-				env,
-				"Slaves are already initialized!"
-			).ThrowAsJavaScriptException();
-
-		return env.Null();
-	}
-
-	if (info.Length() == 2){
-		do_sort_slave = info[1].As<Napi::Boolean>() ? true : false;
-	}
-
-	std::string json_path = info[0].As<Napi::String>();
-
-	int8_t parsing = parse_json(
-			&json_path[0],
-			slave_entries,
-			&slave_entries_length,
-			startup_parameters,
-			&startup_parameters_length,
-			do_sort_slave
-		);
-
-	return Napi::Number::New(env, parsing);
-}
-
 void _wait_period(struct timespec * wakeup_time){
 	wakeup_time->tv_nsec += PERIOD_NS;
 	while (wakeup_time->tv_nsec >= NSEC_PER_SEC) {
@@ -793,7 +758,7 @@ void _wait_period(struct timespec * wakeup_time){
 }
 
 void assign_domain_identifier(){
-#ifdef DEBUG
+#if DEBUG > 0
 	printf("\nAssigning Domain identifier...\n");
 #endif
 
@@ -806,7 +771,7 @@ void assign_domain_identifier(){
 
 		mapped_domains[identifier] = domain_index;
 
-#ifdef DEBUG
+#if DEBUG > 0
 		printf("DOMAIN Pos %2d 0x%04x:%02x : %x index %d\n", IOs[domain_index].position,
 				IOs[domain_index].index,
 				IOs[domain_index].subindex,
@@ -893,6 +858,132 @@ void finalizer_callback(Napi::Env env, void *finalizeData, TsfnContext *context)
 	delete context;
 }
 
+int8_t init_slave()
+{
+	return parse_json(
+			&json_path[0],
+			slave_entries,
+			&slave_entries_length,
+			startup_parameters,
+			&startup_parameters_length,
+			do_sort_slave
+		);
+}
+
+void init_master_and_domain()
+{
+	DomainN_regs = NULL;
+	master = NULL;
+	DomainN_length = 0;
+	printf("slave length %s, %d\n", "init_master_and_domain", slave_entries_length);
+
+#if DEBUG > 0
+	timespec_get(&epoch, TIME_UTC);
+	fprintf(stdout, "%ld.%09ld | Program Started\n", epoch.tv_sec, epoch.tv_nsec);
+#endif
+
+	if(slave_entries_length == 0){
+		if(init_slave() != 0){
+			Napi::Error::Fatal(
+					"init_master_and_domain",
+					"Slave(s) must be configured first!\n"
+				);
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	// request ethercat master
+	master = ecrt_request_master(0);
+	if (!master) {
+		Napi::Error::Fatal(
+				"init_master_and_domain",
+				"Failed at requesting master!\n"
+			);
+		exit(EXIT_FAILURE);
+	}
+
+	/* configure Slaves at startup */
+	slave_startup_config(master);
+
+	/* Configure PDO at startup */
+	syncmanager_startup_config();
+
+	/* Startup parameters */
+	startup_parameters_config();
+
+	/* Configuring Domain */
+	IOs_length = domain_startup_config(&DomainN_regs, &DomainN_length);
+
+	// Create a new process data domain
+	if (!(DomainN = ecrt_master_create_domain(master))) {
+		Napi::Error::Fatal(
+				"init_master_and_domain",
+				"Domain Creation failed!\n"
+			);
+		exit(EXIT_FAILURE);
+	}
+
+	if (ecrt_domain_reg_pdo_entry_list(DomainN, DomainN_regs)) {
+		Napi::Error::Fatal(
+				"init_master_and_domain",
+				"PDO entry registration failed!\n"
+			);
+		exit(EXIT_FAILURE);
+	}
+
+#if DEBUG > 0
+	for(uint8_t _idx = 0; _idx < IOs_length; _idx++){
+		printf("\t > Domain %3d : Slave%2d 0x%04x:%02x offset %2d\n",
+				_idx,
+				IOs[_idx].position,
+				IOs[_idx].index,
+				IOs[_idx].subindex,
+				IOs[_idx].offset
+			);
+	}
+#endif
+
+	// free allocated memories from startup configurations
+	free(DomainN_regs);
+
+	// map domain indexes
+	assign_domain_identifier();
+
+#if DEBUG > 0
+	fprintf(stdout, "\nMaster & Domain have been initialized.\n");
+#endif
+
+	isMasterReady = 1;
+
+	check_slave_config_states();
+}
+
+void activate_master()
+{
+
+#if DEBUG > 0
+	fprintf(stdout, "\nActivating master...\n");
+#endif
+	if (ecrt_master_activate(master)) {
+		Napi::Error::Fatal(
+				"init_master_and_domain",
+				"Master Activation failed!\n"
+			);
+		exit(EXIT_FAILURE);
+	}
+
+#if DEBUG > 0
+	fprintf(stdout, "\nInitializing Domain data...\n");
+#endif
+	if (!(DomainN_pd = ecrt_domain_data(DomainN))) {
+		Napi::Error::Fatal(
+				"init_master_and_domain",
+				"Domain data initialization failed!\n"
+			);
+		exit(EXIT_FAILURE);
+	}
+}
+
 // The thread entry point. This takes as its arguments the specific
 // threadsafe-function context created inside the main thread.
 void thread_entry(TsfnContext *context) {
@@ -916,98 +1007,17 @@ void thread_entry(TsfnContext *context) {
 	};
 
 	struct timespec wakeup_time;
-
-	ec_pdo_entry_reg_t *DomainN_regs = NULL;
-	ec_master_t *master = NULL;
-
-	int8_t DomainN_length;
 	int8_t ret = 0;
 
-#ifdef DEBUG
-	timespec_get(&epoch, TIME_UTC);
-	fprintf(stdout, "%ld.%09ld | Program Started\n", epoch.tv_sec, epoch.tv_nsec);
+	if(isMasterReady != 1){
+#if DEBUG > 0
+	fprintf(stdout, "\nInitialize Master and Domains\n");
 #endif
-
-	if(slave_entries_length == 0){
-		Napi::Error::Fatal(
-				"thread_entry",
-				"Slave(s) must be configured first!\n"
-			);
-		exit(EXIT_FAILURE);
+		init_master_and_domain();
 	}
 
-	// request ethercat master
-	master = ecrt_request_master(0);
-	if (!master) {
-		Napi::Error::Fatal(
-				"thread_entry",
-				"Failed at requesting master!\n"
-			);
-		exit(EXIT_FAILURE);
-	}
-
-	/* configure Slaves at startup */
-	slave_startup_config(master);
-
-	/* Configure PDO at startup */
-	syncmanager_startup_config();
-
-	/* Startup parameters */
-	startup_parameters_config();
-
-	/* Configuring Domain */
-	IOs_length = domain_startup_config(&DomainN_regs, &DomainN_length);
-
-	// Create a new process data domain
-	if (!(DomainN = ecrt_master_create_domain(master))) {
-		Napi::Error::Fatal(
-				"thread_entry",
-				"Domain Creation failed!\n"
-			);
-		exit(EXIT_FAILURE);
-	}
-
-	if (ecrt_domain_reg_pdo_entry_list(DomainN, DomainN_regs)) {
-		Napi::Error::Fatal(
-				"thread_entry",
-				"PDO entry registration failed!\n"
-			);
-		exit(EXIT_FAILURE);
-	}
-
-#ifdef DEBUG
-	for(uint8_t _idx = 0; _idx < IOs_length; _idx++){
-		printf("\t > Domain %3d : Slave%2d 0x%04x:%02x offset %2d\n",
-				_idx,
-				IOs[_idx].position,
-				IOs[_idx].index,
-				IOs[_idx].subindex,
-				IOs[_idx].offset
-			);
-	}
-#endif
-
-#ifdef DEBUG
-	fprintf(stdout, "\nActivating master...\n");
-#endif
-	if (ecrt_master_activate(master)) {
-		Napi::Error::Fatal(
-				"thread_entry",
-				"Master Activation failed!\n"
-			);
-		exit(EXIT_FAILURE);
-	}
-
-#ifdef DEBUG
-	fprintf(stdout, "\nInitializing Domain data...\n");
-#endif
-	if (!(DomainN_pd = ecrt_domain_data(DomainN))) {
-		Napi::Error::Fatal(
-				"thread_entry",
-				"Domain data initialization failed!\n"
-			);
-		exit(EXIT_FAILURE);
-	}
+	// activate master and initialize domain data
+	activate_master();
 
 	/* Set priority */
 	struct sched_param param = {};
@@ -1020,7 +1030,7 @@ void thread_entry(TsfnContext *context) {
 
 	stack_prefault();
 
-#ifdef DEBUG
+#if DEBUG > 0
 	fprintf(stdout, "\nStarting RT task with dt=%u ns.\n", PERIOD_NS);
 #endif
 
@@ -1028,19 +1038,13 @@ void thread_entry(TsfnContext *context) {
 	wakeup_time.tv_sec += 1; /* start in future */
 	wakeup_time.tv_nsec = 0;
 
-	// free allocated memories from startup configurations
-	free(DomainN_regs);
-
-	// map domain indexes
-	assign_domain_identifier();
-
 	_running_state = 1;
 
 	while (1) {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
 
 		if (ret || !_running_state) {
-			fprintf(stderr, "\nBreak Cyclic Process %d\n", ret);
+			fprintf(stderr, "\nBreak Cyclic Process %d (running_state %d)\n", ret, _running_state);
 			context->tsfn.Abort();
 			break;
 		}
@@ -1069,10 +1073,50 @@ void thread_entry(TsfnContext *context) {
 	}
 
 	reset_global_vars();
-
 	ecrt_release_master(master);
+	isMasterReady = 0;
 
 	context->tsfn.Release();
+}
+
+/****************************************************************************/
+
+Napi::Value js_init_slave(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+	do_sort_slave = 0;
+
+	if (info.Length() < 1 || !info[0].IsString()){
+		Napi::TypeError::New(
+				env,
+				"Expected 1 Parameter(s) to be passed [ String ]"
+			).ThrowAsJavaScriptException();
+
+		return env.Null();
+	}
+
+	if (slave_entries_length > 0){
+		Napi::TypeError::New(
+				env,
+				"Slaves are already initialized!"
+			).ThrowAsJavaScriptException();
+
+		return env.Null();
+	}
+
+	if (info.Length() == 2){
+		do_sort_slave = info[1].As<Napi::Boolean>() ? true : false;
+	}
+
+	json_path = info[0].As<Napi::String>();
+
+	int8_t parsing = init_slave();
+
+	printf("slave length %s %d\n", "init_slave", slave_entries_length);
+
+	init_master_and_domain();
+
+	return Napi::Number::New(env, parsing);
 }
 
 Napi::Value create_tsfn(const Napi::CallbackInfo &info) {
@@ -1333,7 +1377,7 @@ void set_sdo_data(const Napi::Env& env, const size_t& size, Napi::Value* value)
 	}
 }
 
-Napi::Value sdo_request_read(const Napi::CallbackInfo& info)
+Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 {
 	Napi::Env env = info.Env();
 
@@ -1342,31 +1386,87 @@ Napi::Value sdo_request_read(const Napi::CallbackInfo& info)
 	uint8_t subindex = info[2].As<Napi::Number>().Uint32Value();
 	size_t size = info[3].As<Napi::Number>().Uint32Value();
 	uint32_t timeout = 100;
+	uint8_t verbosity = 0;
+	Napi::Value result;
+
+	struct timespec start, current;
+
+	ec_slave_config_t* slave;
+	ec_slave_config_state_t state;
 
 	if(info.Length() > 4 && info[4].IsNumber()){
 		timeout = info[4].As<Napi::Number>().Uint32Value();
 	}
 
-	Napi::Value result;
+	if(info.Length() > 5 && info[5].IsNumber()){
+		verbosity = info[5].As<Napi::Number>().Uint32Value();
+	}
 
-	if (!(sdo_req = ecrt_slave_config_create_sdo_request(sc_slaves[pos], index, subindex, size))) {
-		fprintf(stderr, "Failed to create SDO request.\n");
+	try {
+
+		slave = sc_slaves.at(pos);
+		ecrt_slave_config_state(slave, &state);
+
+	} catch (const std::out_of_range& err) {
+		if(verbosity > 0){
+			fprintf(stderr, "Slave pos %d doesn't exist! (max %ld)\n",
+				pos, sc_slaves.size());
+		}
+
 		return env.Undefined();
 	}
 
-	ecrt_sdo_request_read(sdo_req); // trigger read
+#if DEBUG > 1
+	fprintf(stdout,
+		"Slave %d 0x%04x:%02x - Online %02x | OP %02x | State %02x\n",
+		pos, index, subindex, state.online, state.operational, state.al_state);
+#endif
+
+	// if slave is not operational, then sdo request state will be in busy
+	// until it's operational.
+	if(state.operational != 0x01){
+		if(verbosity > 0){
+			fprintf(stderr, "Slave %d 0x%04x:%02x is not OP! (%02x)\n",
+				pos, index, subindex, state.online);
+		}
+
+		return env.Undefined();
+	}
+
+	if (!(sdo_req = ecrt_slave_config_create_sdo_request(slave, index, subindex, size))) {
+		if(verbosity > 0){
+			fprintf(stderr, "Failed to create SDO request!\n");
+		}
+
+		return env.Undefined();
+	}
+
+	// trigger read
+	ecrt_sdo_request_read(sdo_req);
 	ecrt_sdo_request_timeout(sdo_req, timeout);
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
 	while(1){
 		switch (ecrt_sdo_request_state(sdo_req)) {
-			case EC_REQUEST_UNUSED: // request was not used yet
-				ecrt_sdo_request_read(sdo_req); // trigger read
+			case EC_REQUEST_UNUSED:
+				// request was not used yet, trigger read
+				ecrt_sdo_request_read(sdo_req);
 				break;
 
 			case EC_REQUEST_BUSY:
-#if DEBUG > 0
-				fprintf(stdout, "BUSY %d 0x%04x:%02x\n", pos, index, subindex);
-#endif
+				// there's possibility the loop stuck in busy state
+				// limit the loop with the timeout
+				clock_gettime(CLOCK_MONOTONIC, &current);
+				if((NSEC_PER_SEC * (current.tv_sec - start.tv_sec))
+					+ current.tv_nsec - start.tv_nsec > (timeout * 1000000)){
+
+					if(verbosity > 0){
+						fprintf(stderr, "Timeout waiting for Busy Request!\n");
+					}
+
+					return env.Undefined();
+				}
 				break;
 
 			case EC_REQUEST_SUCCESS: {
@@ -1382,7 +1482,7 @@ Napi::Value sdo_request_read(const Napi::CallbackInfo& info)
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, init_slave));
+	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, js_init_slave));
 	exports.Set(Napi::String::New(env, "writeIndex"), Napi::Function::New(env, write_index));
 	exports.Set(Napi::String::New(env, "isOperational"), Napi::Function::New(env, get_operational_status));
 	exports.Set(Napi::String::New(env, "start"), Napi::Function::New(env, create_tsfn));
@@ -1394,7 +1494,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set(Napi::String::New(env, "writeDomain"), Napi::Function::New(env, js_write_by_key));
 	exports.Set(Napi::String::New(env, "readDomain"), Napi::Function::New(env, js_read_by_key));
 	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
-	exports.Set(Napi::String::New(env, "sdoRead"), Napi::Function::New(env, sdo_request_read));
+	exports.Set(Napi::String::New(env, "sdoRead"), Napi::Function::New(env, js_sdo_request_read));
 
 	return exports;
 }
