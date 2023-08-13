@@ -875,7 +875,6 @@ void init_master_and_domain()
 	DomainN_regs = NULL;
 	master = NULL;
 	DomainN_length = 0;
-	printf("slave length %s, %d\n", "init_master_and_domain", slave_entries_length);
 
 #if DEBUG > 0
 	timespec_get(&epoch, TIME_UTC);
@@ -1111,8 +1110,6 @@ Napi::Value js_init_slave(const Napi::CallbackInfo& info) {
 	json_path = info[0].As<Napi::String>();
 
 	int8_t parsing = init_slave();
-
-	printf("slave length %s %d\n", "init_slave", slave_entries_length);
 
 	init_master_and_domain();
 
@@ -1422,12 +1419,13 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 		pos, index, subindex, state.online, state.operational, state.al_state);
 #endif
 
-	// if slave is not operational, then sdo request state will be in busy
-	// until it's operational.
-	if(state.operational != 0x01){
+	// TODO: Find how Busy Request never ends once it happens.
+	// this condition is to prevent infinite Busy Request, but tbh I'm not sure why it happens.
+	// so for now, I simply prevent creating request when slave is in INIT state
+	if(state.al_state == 0x01){
 		if(verbosity > 0){
-			fprintf(stderr, "Slave %d 0x%04x:%02x is not OP! (%02x)\n",
-				pos, index, subindex, state.online);
+			fprintf(stderr, "Slave %d 0x%04x:%02x is in INIT state! (%02x)\n",
+				pos, index, subindex, state.al_state);
 		}
 
 		return env.Undefined();
