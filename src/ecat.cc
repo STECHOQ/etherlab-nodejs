@@ -353,8 +353,9 @@ void cyclic_task(ec_master_t *master, io_size_et dmn_size){
 			}
 
 #if DEBUG > 1
-			printf("Index %2d 0x%04x:%02x = %04x\n", dmn_idx, IOs[dmn_idx].index,
-										IOs[dmn_idx].subindex, IOs[dmn_idx].value);
+			printf("Index %2d pos %d 0x%04x:%02x = %04x\n", dmn_idx,
+				IOs[dmn_idx].position, IOs[dmn_idx].index, IOs[dmn_idx].subindex,
+				IOs[dmn_idx].value);
 #endif
 
 		};
@@ -387,6 +388,13 @@ void domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, io_size_et *dmn_si
 	// find length of valid domain inside slave_entries
 	*dmn_size = 0;
 	for(slNumber = 0; slNumber < length; slNumber++){
+
+		// prevent bit-padding from being added into domains
+		if(slave_entries[slNumber].index == 0x0000){
+			slave_entries[slNumber].add_to_domain = 0;
+			continue;
+		}
+
 		if(slave_entries[slNumber].add_to_domain){
 			(*dmn_size)++;
 		}
