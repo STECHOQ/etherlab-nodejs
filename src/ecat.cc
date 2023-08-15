@@ -97,6 +97,19 @@ static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 static std::string json_path;
 static bool do_sort_slave;
 
+// Data structure representing our thread-safe function context.
+struct TsfnContext {
+	TsfnContext(Napi::Env env) : deferred(Napi::Promise::Deferred::New(env)) {};
+
+	// Native Promise returned to JavaScript
+	Napi::Promise::Deferred deferred;
+
+	// Native thread
+	std::thread nativeThread;
+
+	Napi::ThreadSafeFunction tsfn;
+};
+
 /*****************************************************************************/
 
 void check_domain_state(void)
@@ -104,7 +117,7 @@ void check_domain_state(void)
 	ec_domain_state_t ds;
 	ecrt_domain_state(DomainN, &ds);
 
-#if DEBUG > 0
+#if DEBUG > 1
 	if (ds.working_counter != DomainN_state.working_counter) {
 		timespec_get(&epoch, TIME_UTC);
 		printf("%ld.%09ld | Domain1: WC %u.\n",
@@ -127,14 +140,12 @@ void check_domain_state(void)
 	DomainN_state = ds;
 }
 
-/*****************************************************************************/
-
 void check_master_state(ec_master_t *master)
 {
 	ec_master_state_t ms;
 	ecrt_master_state(master, &ms);
 
-#if DEBUG > 0
+#if DEBUG > 1
 	if (ms.slaves_responding != master_state.slaves_responding) {
 		timespec_get(&epoch, TIME_UTC);
 		printf("%ld.%09ld | %u slave(s).\n",
@@ -166,13 +177,14 @@ void check_master_state(ec_master_t *master)
 	master_state = ms;
 }
 
-void check_slave_config_states(void){
+void check_slave_config_states(void)
+{
 	for(slave_size_et slNumber = 0; slNumber < slaves_length; slNumber++){
 		ec_slave_config_state_t s;
 
 		ecrt_slave_config_state(sc_slaves[slNumber], &s);
 
-#if DEBUG > 0
+#if DEBUG > 1
 		if (s.al_state != slaves[slNumber].state.al_state) {
 			timespec_get(&epoch, TIME_UTC);
 			printf("%ld.%09ld | Slaves %d : State 0x%02X.\n",
@@ -208,9 +220,8 @@ void check_slave_config_states(void){
 	}
 }
 
-/*****************************************************************************/
-
-uint8_t check_is_operational(){
+uint8_t check_is_operational()
+{
 	for(slave_size_et slNumber = 0; slNumber < slaves_length; slNumber++){
 		if(!slaves[slNumber].state.operational){
 			return 0;
@@ -220,7 +231,8 @@ uint8_t check_is_operational(){
 	return 1;
 }
 
-int8_t write_output_value(io_size_et dmn_idx, ecat_value_al value, uint8_t SIGNED){
+int8_t write_output_value(io_size_et dmn_idx, ecat_value_al value, uint8_t SIGNED)
+{
 	// selected index is not output, return immediately
 	if(IOs[dmn_idx].direction != EC_DIR_OUTPUT){
 		return -1;
@@ -266,9 +278,8 @@ int8_t write_output_value(io_size_et dmn_idx, ecat_value_al value, uint8_t SIGNE
 	return 1;
 }
 
-/*****************************************************************************/
-
-void cyclic_task(ec_master_t *master, io_size_et dmn_size){
+void cyclic_task(ec_master_t *master, io_size_et dmn_size)
+{
 	// receive process data
 	ecrt_master_receive(master);
 	ecrt_domain_process(DomainN);
@@ -352,7 +363,7 @@ void cyclic_task(ec_master_t *master, io_size_et dmn_size){
 					break;
 			}
 
-#if DEBUG > 1
+#if DEBUG > 2
 			printf("Index %2d pos %d 0x%04x:%02x = %04x\n", dmn_idx,
 				IOs[dmn_idx].position, IOs[dmn_idx].index, IOs[dmn_idx].subindex,
 				IOs[dmn_idx].value);
@@ -360,7 +371,7 @@ void cyclic_task(ec_master_t *master, io_size_et dmn_size){
 
 		};
 
-#if DEBUG > 1
+#if DEBUG > 2
 		printf("=====================\n");
 #endif
 
@@ -448,11 +459,12 @@ void domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, io_size_et *dmn_si
 				};
 
 #if DEBUG > 0
-			printf("Domain %3d : Slave%2d 0x%04x:%02x\n",
+			printf("  > Domain %3d: Slave %3d 0x%04x:%02x offset %2d\n",
 					dmn_idx,
 					(*DomainN_regs)[dmn_idx].position,
 					(*DomainN_regs)[dmn_idx].index,
-					(*DomainN_regs)[dmn_idx].subindex
+					(*DomainN_regs)[dmn_idx].subindex,
+					IOs[dmn_idx].offset
 				);
 #endif
 
@@ -462,10 +474,6 @@ void domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, io_size_et *dmn_si
 
 	// terminate with an empty structure
 	(*DomainN_regs)[(*dmn_size)] = {};
-
-#if DEBUG > 0
-	fprintf(stdout, "\nConfigured %d domains.\n", *dmn_size);
-#endif
 }
 
 uint32_t _convert_index_sub_size(ecat_index_al index, ecat_sub_al subindex,
@@ -545,17 +553,15 @@ void syncmanager_startup_config()
 		}
 
 		if(last_syncM_index != syncM_index && slave_entries[slNumber].pdo_index){
-			ecrt_slave_config_pdo_assign_clear(
-							sc_slaves[current_position],
-							syncM_index
-						);
+			ecrt_slave_config_pdo_assign_clear(sc_slaves[current_position],
+				syncM_index);
+
+			last_syncM_index = syncM_index;
 
 #if DEBUG > 0
 			printf("clear PDO assign                     : Slave%2d SM%d\n",
 												current_position, syncM_index);
 #endif
-
-			last_syncM_index = syncM_index;
 		}
 
 		// invalid pdo index use default configuration, continue to next index
@@ -694,7 +700,8 @@ void slave_startup_config(ec_master_t *master)
 	}
 }
 
-void startup_parameters_config(){
+void startup_parameters_config()
+{
 #if DEBUG > 0
 	fprintf(stdout, "\nConfiguring Startup Parameters...\n");
 #endif
@@ -743,7 +750,8 @@ void startup_parameters_config(){
 	}
 }
 
-void reset_global_vars(void){
+void reset_global_vars(void)
+{
 	IOs.clear();
 	IOs_length = 0;
 
@@ -761,12 +769,14 @@ void reset_global_vars(void){
 
 /****************************************************************************/
 
-void stack_prefault(void){
+void stack_prefault(void)
+{
 	unsigned char dummy[MAX_SAFE_STACK];
 	memset(dummy, 0, MAX_SAFE_STACK);
 }
 
-void _wait_period(struct timespec * wakeup_time){
+void set_next_wait_period(struct timespec* wakeup_time)
+{
 	wakeup_time->tv_nsec += PERIOD_NS;
 	while (wakeup_time->tv_nsec >= NSEC_PER_SEC) {
 		wakeup_time->tv_nsec -= NSEC_PER_SEC;
@@ -774,7 +784,8 @@ void _wait_period(struct timespec * wakeup_time){
 	}
 }
 
-void assign_domain_identifier(){
+void assign_domain_identifier()
+{
 #if DEBUG > 0
 	printf("\nAssigning Domain identifier...\n");
 #endif
@@ -787,14 +798,6 @@ void assign_domain_identifier(){
 			);
 
 		mapped_domains[identifier] = dmn_idx;
-
-#if DEBUG > 0
-		printf("DOMAIN Pos %2d 0x%04x:%02x : %x index %d\n", IOs[dmn_idx].position,
-				IOs[dmn_idx].index,
-				IOs[dmn_idx].subindex,
-				identifier,
-				mapped_domains[identifier]);
-#endif
 	}
 }
 
@@ -859,33 +862,6 @@ int8_t read_domain(const ecat_pos_al& s_position, const ecat_index_al& s_index,
 	return 0;
 }
 
-/****************************************************************************/
-// Data structure representing our thread-safe function context.
-struct TsfnContext {
-	TsfnContext(Napi::Env env) : deferred(Napi::Promise::Deferred::New(env)) {};
-
-	// Native Promise returned to JavaScript
-	Napi::Promise::Deferred deferred;
-
-	// Native thread
-	std::thread nativeThread;
-
-	Napi::ThreadSafeFunction tsfn;
-};
-
-// The thread-safe function finalizer callback. This callback executes
-// at destruction of thread-safe function, taking as arguments the finalizer
-// data and threadsafe-function context.
-void finalizer_callback(Napi::Env env, void *finalizeData, TsfnContext *context)
-{
-	// Join the thread
-	context->nativeThread.join();
-
-	// Resolve the Promise previously returned to JS via the create_tsfn method.
-	context->deferred.Resolve(Napi::Boolean::New(env, true));
-	delete context;
-}
-
 int8_t init_slave()
 {
 	return parse_json(
@@ -900,14 +876,13 @@ int8_t init_slave()
 
 void init_master_and_domain()
 {
+#if DEBUG > 0
+	fprintf(stdout, "\nInitialize Master and Domains\n");
+#endif
+
 	DomainN_regs = NULL;
 	master = NULL;
 	DomainN_length = 0;
-
-#if DEBUG > 0
-	timespec_get(&epoch, TIME_UTC);
-	fprintf(stdout, "%ld.%09ld | Program Started\n", epoch.tv_sec, epoch.tv_nsec);
-#endif
 
 	if(slave_entries_length == 0){
 		if(init_slave() != 0){
@@ -959,18 +934,6 @@ void init_master_and_domain()
 		exit(EXIT_FAILURE);
 	}
 
-#if DEBUG > 0
-	for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
-		printf("\t> Domain %3d : Slave%2d 0x%04x:%02x offset %2d\n",
-				dmn_idx,
-				IOs[dmn_idx].position,
-				IOs[dmn_idx].index,
-				IOs[dmn_idx].subindex,
-				IOs[dmn_idx].offset
-			);
-	}
-#endif
-
 	// free allocated memories from startup configurations
 	free(DomainN_regs);
 
@@ -979,7 +942,8 @@ void init_master_and_domain()
 
 #if DEBUG > 0
 	fprintf(stdout, "\nMaster & Domain have been initialized.\n");
-	fprintf(stdout, "\nSlaves Entries Length: %ld\n", sc_slaves.size());
+	fprintf(stdout, "Slaves Entries Length: %ld\n", sc_slaves.size());
+	fprintf(stdout, "Number of Domains: %d \n", DomainN_length);
 #endif
 
 	isMasterReady = 1;
@@ -1011,373 +975,6 @@ void activate_master()
 			);
 		exit(EXIT_FAILURE);
 	}
-}
-
-// The thread entry point. This takes as its arguments the specific
-// threadsafe-function context created inside the main thread.
-void thread_entry(TsfnContext *context) {
-	auto callback = [](Napi::Env env, Napi::Function jsCallback, int8_t* data) {
-		Napi::Array values = Napi::Array::New(env, IOs_length);
-
-		for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
-			Napi::Object indexValue = Napi::Object::New(env);
-			indexValue.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
-			indexValue.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
-			indexValue.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
-			indexValue.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
-
-			values[dmn_idx] = indexValue;
-		}
-
-		jsCallback.Call({
-				values,
-				Napi::Number::New(env, master_state.al_states)
-			});
-	};
-
-	struct timespec wakeup_time;
-	int8_t ret = 0;
-
-	if(isMasterReady != 1){
-#if DEBUG > 0
-	fprintf(stdout, "\nInitialize Master and Domains\n");
-#endif
-		init_master_and_domain();
-	}
-
-	// activate master and initialize domain data
-	activate_master();
-
-	/* Set priority */
-	struct sched_param param = {};
-	param.sched_priority = sched_get_priority_max(SCHED_FIFO);
-
-	fprintf(stdout, "\nUsing priority %i\n", param.sched_priority);
-	if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
-		perror("sched_setscheduler failed");
-	}
-
-	stack_prefault();
-
-#if DEBUG > 0
-	fprintf(stdout, "\nStarting RT task with dt=%u ns.\n", PERIOD_NS);
-#endif
-
-	clock_gettime(CLOCK_MONOTONIC, &wakeup_time);
-	wakeup_time.tv_sec += 1; /* start in future */
-	wakeup_time.tv_nsec = 0;
-
-	_running_state = 1;
-
-	while (1) {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
-
-		if (ret || !_running_state) {
-			fprintf(stderr, "\nBreak Cyclic Process %d (running_state %d)\n", ret, _running_state);
-			context->tsfn.Abort();
-			break;
-		}
-
-		cyclic_task(master, DomainN_length);
-
-		napi_status status = context->tsfn.BlockingCall(&ret, callback);
-
-		if (status != napi_ok) {
-			Napi::Error::Fatal(
-					"thread_entry",
-					"Napi::ThreadSafeNapi::Function.BlockingCall() failed"
-				);
-		}
-
-		_wait_period(&wakeup_time);
-	}
-
-	ecrt_master_deactivate(master);
-
-	// wait until OP bit is reset after deactivation
-	while(MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)){
-		// update master state
-		check_master_state(master);
-		_wait_period(&wakeup_time);
-	}
-
-	reset_global_vars();
-	ecrt_release_master(master);
-	isMasterReady = 0;
-
-	context->tsfn.Release();
-}
-
-/****************************************************************************/
-
-Napi::Value js_init_slave(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	do_sort_slave = 0;
-
-	if (info.Length() < 1 || !info[0].IsString()){
-		Napi::TypeError::New(
-				env,
-				"Expected 1 Parameter(s) to be passed [ String ]"
-			).ThrowAsJavaScriptException();
-
-		return env.Null();
-	}
-
-	if (slave_entries_length > 0){
-		Napi::TypeError::New(
-				env,
-				"Slaves are already initialized!"
-			).ThrowAsJavaScriptException();
-
-		return env.Null();
-	}
-
-	if (info.Length() == 2){
-		do_sort_slave = info[1].As<Napi::Boolean>() ? true : false;
-	}
-
-	json_path = info[0].As<Napi::String>();
-
-	int8_t parsing = init_slave();
-
-	init_master_and_domain();
-
-	return Napi::Number::New(env, parsing);
-}
-
-Napi::Value create_tsfn(const Napi::CallbackInfo &info) {
-	Napi::Env env = info.Env();
-
-	// Construct context data
-	auto _ctx = new TsfnContext(env);
-
-	// Create a new ThreadSafeFunction.
-	_ctx->tsfn = Napi::ThreadSafeFunction::New(
-			env, // Environment
-			info[0].As<Napi::Function>(), // JS function from caller
-			"TSFN", // Resource name
-			0, // Max queue size (0 = unlimited).
-			2, // Initial thread count
-			_ctx, // Context,
-			finalizer_callback, // Finalizer
-			(void *)nullptr	// Finalizer data
-		);
-
-	_ctx->nativeThread = std::thread(thread_entry, _ctx);
-
-	return _ctx->deferred.Promise();
-}
-
-Napi::Value set_frequency(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	uint32_t frequency = info[0].As<Napi::Number>();
-
-	FREQUENCY = frequency;
-	PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
-
-	return Napi::Number::New(env, PERIOD_NS);
-}
-
-Napi::Value set_period_us(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	uint32_t period_us = info[0].As<Napi::Number>();
-
-	PERIOD_NS = period_us * 1000;
-	FREQUENCY = NSEC_PER_SEC / (float(period_us) * 1000);
-
-	return Napi::Number::New(env, PERIOD_NS);
-}
-
-Napi::Value get_operational_status(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	return Napi::Number::New(env, check_is_operational());
-}
-
-Napi::Value stop(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-	_running_state = 0;
-
-	return Napi::Number::New(env, _running_state);
-}
-
-Napi::Value write_index(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	// don't execute when main task is not running
-	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
-		|| _running_state != 1
-		|| IOs_length <= 0
-	){
-		return Napi::Number::New(env, -1);
-	}
-
-	io_size_et dmn_idx = info[0].As<Napi::Number>();
-	ecat_value_al value = info[1].As<Napi::Number>();
-
-	IOs[dmn_idx].writtenValue = value;
-
-	return Napi::Number::New(env, IOs[dmn_idx].writtenValue);
-}
-
-Napi::Value js_write_by_key(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	// don't execute when main task is not running
-	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
-		|| _running_state != 1
-		|| IOs_length <= 0
-	){
-		return env.Null();
-	}
-
-	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
-	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
-	ecat_sub_al subindex = info[2].As<Napi::Number>().Uint32Value();
-	ecat_value_al value = info[3].As<Napi::Number>().Uint32Value();
-
-	if(write_domain(pos, index, subindex, value) < 0){
-		return env.Undefined();
-	}
-
-	return Napi::Boolean::New(env, true);
-}
-
-Napi::Value js_read_by_key(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	// don't execute when main task is not running
-	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
-		|| _running_state != 1
-		|| IOs_length <= 0
-	){
-		return env.Null();
-	}
-
-	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
-	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
-	ecat_sub_al subindex = (ecat_sub_al) info[2].As<Napi::Number>().Uint32Value();
-	ecat_value_al value;
-
-	if(read_domain(pos, index, subindex, &value) < 0){
-		return env.Undefined();
-	}
-
-	return Napi::Number::New(env, value);
-}
-
-Napi::Value js_get_mapped_domains(const Napi::CallbackInfo& info){
-	Napi::Env env = info.Env();
-
-	if(mapped_domains.empty()){
-		return env.Undefined();
-	}
-
-	Napi::Object js_retval = Napi::Object::New(env);
-	ecat_pos_al pos;
-	ecat_index_al index;
-	ecat_sub_al subindex;
-	bool do_print = info[0].As<Napi::Boolean>();
-
-	for(auto elem : mapped_domains){
-		pos = (elem.first >> 24) & 0xff;
-		index = (elem.first >> 8) & 0xffff;
-		subindex = (elem.first) & 0xff;
-
-		char tmpstr[30];
-		sprintf(tmpstr, "%d:%04x:%02x", pos, index, subindex);
-		js_retval.Set(tmpstr, Napi::Number::New(env, elem.second));
-
-		if(do_print){
-			fprintf(stdout, "Pos %d at 0x%04x:%02x = %d\n", pos, index,
-				subindex, elem.second);
-		}
-	}
-
-	return js_retval;
-}
-
-Napi::Promise get_allocated_domain(const Napi::CallbackInfo& info) {
-	Napi::Env env = info.Env();
-
-	auto deferred = Napi::Promise::Deferred::New(env);
-
-	// check if domain have been allocated or not
-	if(IOs_length == 0){
-		deferred.Reject(
-			Napi::TypeError::New(
-					env,
-					"Slave(s) must be configured first"
-				).Value()
-		);
-
-		return deferred.Promise();
-	}
-
-	Napi::Array _domains = Napi::Array::New(env, IOs_length);
-	for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
-		Napi::Object item = Napi::Object::New(env);
-		item.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
-		item.Set("vendorId", Napi::Value::From(env, IOs[dmn_idx].vendor_id));
-		item.Set("productCode", Napi::Value::From(env, IOs[dmn_idx].product_code));
-		item.Set("pdoIndex", Napi::Value::From(env, IOs[dmn_idx].pdo_index));
-		item.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
-		item.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
-		item.Set("size", Napi::Value::From(env, IOs[dmn_idx].size));
-		item.Set("isEndianSwapped", Napi::Value::From(env, IOs[dmn_idx].SWAP_ENDIAN));
-		item.Set("isSigned", Napi::Value::From(env, IOs[dmn_idx].SIGNED));
-		item.Set("direction", Napi::Value::From(env, IOs[dmn_idx].direction));
-		item.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
-
-		_domains[dmn_idx] = item;
-	}
-
-    deferred.Resolve(_domains);
-
-	return deferred.Promise();
-}
-
-Napi::Promise get_domain_values(const Napi::CallbackInfo& info){
-	Napi::Env env = info.Env();
-
-	auto deferred = Napi::Promise::Deferred::New(env);
-
-	// check if domain have been allocated or not
-	if(IOs_length == 0){
-		deferred.Reject(
-			Napi::TypeError::New(
-					env,
-					"Slave(s) must be configured first"
-				).Value()
-		);
-
-		return deferred.Promise();
-	}
-
-	Napi::Array values = Napi::Array::New(env, IOs_length);
-
-	for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
-		Napi::Object indexValue = Napi::Object::New(env);
-		indexValue.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
-		indexValue.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
-		indexValue.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
-		indexValue.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
-
-		values[dmn_idx] = indexValue;
-	}
-
-    deferred.Resolve(values);
-
-	return deferred.Promise();
-}
-
-Napi::Value get_master_state(const Napi::CallbackInfo& info)
-{
-	Napi::Env env = info.Env();
-	return Napi::Number::New(env, master_state.al_states);
 }
 
 void read_sdo_data(ec_sdo_request_t* req, const ecat_size_al& size, void* value)
@@ -1531,6 +1128,407 @@ int8_t sdo_request(const sdo_req_type_al& rtype, void* result, const ecat_pos_al
 	}
 }
 
+/****************************************************************************/
+
+// The thread-safe function finalizer callback. This callback executes
+// at destruction of thread-safe function, taking as arguments the finalizer
+// data and threadsafe-function context.
+void finalizer_callback(Napi::Env env, void *finalizeData, TsfnContext *context)
+{
+	// Join the thread
+	context->nativeThread.join();
+
+	// Resolve the Promise previously returned to JS via the js_create_thread method.
+	context->deferred.Resolve(Napi::Boolean::New(env, true));
+	delete context;
+}
+
+// The thread entry point. This takes as its arguments the specific
+// threadsafe-function context created inside the main thread.
+void thread_entry(TsfnContext *context) {
+	auto callback = [](Napi::Env env, Napi::Function jsCallback, int8_t* data) {
+		Napi::Array values = Napi::Array::New(env, IOs_length);
+
+		for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
+			Napi::Object indexValue = Napi::Object::New(env);
+			indexValue.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
+			indexValue.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
+			indexValue.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
+			indexValue.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
+
+			values[dmn_idx] = indexValue;
+		}
+
+		jsCallback.Call({
+				values,
+				Napi::Number::New(env, master_state.al_states)
+			});
+	};
+
+	struct timespec wakeup_time;
+	int8_t ret = 0;
+
+#if DEBUG > 0
+	timespec_get(&epoch, TIME_UTC);
+	fprintf(stdout, "%ld.%09ld | Program Started\n", epoch.tv_sec, epoch.tv_nsec);
+#endif
+
+	if(isMasterReady != 1){
+		init_master_and_domain();
+	}
+
+	// activate master and initialize domain data
+	activate_master();
+
+	/* Set priority */
+	struct sched_param param = {};
+	param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+
+	if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+		perror("sched_setscheduler failed");
+	}
+
+	stack_prefault();
+
+#if DEBUG > 0
+	fprintf(stdout, "\nUsing priority %i\n", param.sched_priority);
+	fprintf(stdout, "\nStarting RT task with dt=%u ns.\n", PERIOD_NS);
+#endif
+
+	clock_gettime(CLOCK_MONOTONIC, &wakeup_time);
+	wakeup_time.tv_sec += 1; /* start in future */
+	wakeup_time.tv_nsec = 0;
+
+	_running_state = 1;
+
+	while (1) {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
+
+		if (ret || !_running_state) {
+			fprintf(stderr, "\nBreak Cyclic Process %d (running_state %d)\n",
+				ret, _running_state);
+			context->tsfn.Abort();
+			break;
+		}
+
+		cyclic_task(master, DomainN_length);
+
+		napi_status status = context->tsfn.BlockingCall(&ret, callback);
+
+		if (status != napi_ok) {
+			Napi::Error::Fatal(
+					"thread_entry",
+					"Napi::ThreadSafeNapi::Function.BlockingCall() failed"
+				);
+		}
+
+		set_next_wait_period(&wakeup_time);
+	}
+
+	ecrt_master_deactivate(master);
+
+	// wait until OP bit is reset after deactivation
+	while(MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)){
+		// update master state
+		check_master_state(master);
+
+		set_next_wait_period(&wakeup_time);
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
+	}
+
+	reset_global_vars();
+	ecrt_release_master(master);
+	isMasterReady = 0;
+
+	context->tsfn.Release();
+}
+
+/****************************************************************************
+ * Node API
+ ****************************************************************************/
+
+Napi::Value js_init_slave(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	do_sort_slave = 0;
+
+	if (info.Length() < 1 || !info[0].IsString()){
+		Napi::TypeError::New(
+				env,
+				"Expected 1 Parameter(s) to be passed [ String ]"
+			).ThrowAsJavaScriptException();
+
+		return env.Null();
+	}
+
+	if (slave_entries_length > 0){
+		Napi::TypeError::New(
+				env,
+				"Slaves are already initialized!"
+			).ThrowAsJavaScriptException();
+
+		return env.Null();
+	}
+
+	if (info.Length() == 2){
+		do_sort_slave = info[1].As<Napi::Boolean>() ? true : false;
+	}
+
+	json_path = info[0].As<Napi::String>();
+
+	int8_t parsing = init_slave();
+
+	init_master_and_domain();
+
+	return Napi::Number::New(env, parsing);
+}
+
+Napi::Value js_create_thread(const Napi::CallbackInfo &info)
+{
+	Napi::Env env = info.Env();
+
+	// Construct context data
+	auto _ctx = new TsfnContext(env);
+
+	// Create a new ThreadSafeFunction.
+	_ctx->tsfn = Napi::ThreadSafeFunction::New(
+			env, // Environment
+			info[0].As<Napi::Function>(), // JS function from caller
+			"TSFN", // Resource name
+			0, // Max queue size (0 = unlimited).
+			2, // Initial thread count
+			_ctx, // Context,
+			finalizer_callback, // Finalizer
+			(void *)nullptr	// Finalizer data
+		);
+
+	_ctx->nativeThread = std::thread(thread_entry, _ctx);
+
+	return _ctx->deferred.Promise();
+}
+
+Napi::Value js_set_frequency(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	uint32_t frequency = info[0].As<Napi::Number>();
+
+	FREQUENCY = frequency;
+	PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
+
+	return Napi::Number::New(env, PERIOD_NS);
+}
+
+Napi::Value set_period_us(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	uint32_t period_us = info[0].As<Napi::Number>();
+
+	PERIOD_NS = period_us * 1000;
+	FREQUENCY = NSEC_PER_SEC / (float(period_us) * 1000);
+
+	return Napi::Number::New(env, PERIOD_NS);
+}
+
+Napi::Value js_get_operational_status(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	return Napi::Number::New(env, check_is_operational());
+}
+
+Napi::Value js_stop_thread(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+	_running_state = 0;
+
+	return Napi::Number::New(env, _running_state);
+}
+
+Napi::Value js_write_index(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	// don't execute when main task is not running
+	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
+		|| _running_state != 1
+		|| IOs_length <= 0
+	){
+		return Napi::Number::New(env, -1);
+	}
+
+	io_size_et dmn_idx = info[0].As<Napi::Number>();
+	ecat_value_al value = info[1].As<Napi::Number>();
+
+	IOs[dmn_idx].writtenValue = value;
+
+	return Napi::Number::New(env, IOs[dmn_idx].writtenValue);
+}
+
+Napi::Value js_write_by_key(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	// don't execute when main task is not running
+	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
+		|| _running_state != 1
+		|| IOs_length <= 0
+	){
+		return env.Null();
+	}
+
+	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
+	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
+	ecat_sub_al subindex = info[2].As<Napi::Number>().Uint32Value();
+	ecat_value_al value = info[3].As<Napi::Number>().Uint32Value();
+
+	if(write_domain(pos, index, subindex, value) < 0){
+		return env.Undefined();
+	}
+
+	return Napi::Boolean::New(env, true);
+}
+
+Napi::Value js_read_by_key(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	// don't execute when main task is not running
+	if(!MASTER_STATE_DETAIL(AL_BIT_OP, master_state.al_states)
+		|| _running_state != 1
+		|| IOs_length <= 0
+	){
+		return env.Null();
+	}
+
+	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
+	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
+	ecat_sub_al subindex = (ecat_sub_al) info[2].As<Napi::Number>().Uint32Value();
+	ecat_value_al value;
+
+	if(read_domain(pos, index, subindex, &value) < 0){
+		return env.Undefined();
+	}
+
+	return Napi::Number::New(env, value);
+}
+
+Napi::Value js_get_mapped_domains(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	if(mapped_domains.empty()){
+		return env.Undefined();
+	}
+
+	Napi::Object js_retval = Napi::Object::New(env);
+	ecat_pos_al pos;
+	ecat_index_al index;
+	ecat_sub_al subindex;
+	bool do_print = info[0].As<Napi::Boolean>();
+
+	for(auto elem : mapped_domains){
+		pos = (elem.first >> 24) & 0xff;
+		index = (elem.first >> 8) & 0xffff;
+		subindex = (elem.first) & 0xff;
+
+		char tmpstr[30];
+		sprintf(tmpstr, "%d:%04x:%02x", pos, index, subindex);
+		js_retval.Set(tmpstr, Napi::Number::New(env, elem.second));
+
+		if(do_print){
+			fprintf(stdout, "Pos %d at 0x%04x:%02x = %d\n", pos, index,
+				subindex, elem.second);
+		}
+	}
+
+	return js_retval;
+}
+
+Napi::Promise js_get_allocated_domain(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	auto deferred = Napi::Promise::Deferred::New(env);
+
+	// check if domain have been allocated or not
+	if(IOs_length == 0){
+		deferred.Reject(
+			Napi::TypeError::New(
+					env,
+					"Slave(s) must be configured first"
+				).Value()
+		);
+
+		return deferred.Promise();
+	}
+
+	Napi::Array _domains = Napi::Array::New(env, IOs_length);
+	for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
+		Napi::Object item = Napi::Object::New(env);
+		item.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
+		item.Set("vendorId", Napi::Value::From(env, IOs[dmn_idx].vendor_id));
+		item.Set("productCode", Napi::Value::From(env, IOs[dmn_idx].product_code));
+		item.Set("pdoIndex", Napi::Value::From(env, IOs[dmn_idx].pdo_index));
+		item.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
+		item.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
+		item.Set("size", Napi::Value::From(env, IOs[dmn_idx].size));
+		item.Set("isEndianSwapped", Napi::Value::From(env, IOs[dmn_idx].SWAP_ENDIAN));
+		item.Set("isSigned", Napi::Value::From(env, IOs[dmn_idx].SIGNED));
+		item.Set("direction", Napi::Value::From(env, IOs[dmn_idx].direction));
+		item.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
+
+		_domains[dmn_idx] = item;
+	}
+
+    deferred.Resolve(_domains);
+
+	return deferred.Promise();
+}
+
+Napi::Promise js_get_domain_values(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	auto deferred = Napi::Promise::Deferred::New(env);
+
+	// check if domain have been allocated or not
+	if(IOs_length == 0){
+		deferred.Reject(
+			Napi::TypeError::New(
+					env,
+					"Slave(s) must be configured first"
+				).Value()
+		);
+
+		return deferred.Promise();
+	}
+
+	Napi::Array values = Napi::Array::New(env, IOs_length);
+
+	for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
+		Napi::Object indexValue = Napi::Object::New(env);
+		indexValue.Set("position", Napi::Value::From(env, IOs[dmn_idx].position));
+		indexValue.Set("index", Napi::Value::From(env, IOs[dmn_idx].index));
+		indexValue.Set("subindex", Napi::Value::From(env, IOs[dmn_idx].subindex));
+		indexValue.Set("value", Napi::Value::From(env, IOs[dmn_idx].value));
+
+		values[dmn_idx] = indexValue;
+	}
+
+    deferred.Resolve(values);
+
+	return deferred.Promise();
+}
+
+Napi::Value js_get_master_state(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+	return Napi::Number::New(env, master_state.al_states);
+}
+
 Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 {
 	Napi::Env env = info.Env();
@@ -1602,16 +1600,17 @@ Napi::Value js_sdo_request_write(const Napi::CallbackInfo& info)
 	}
 }
 
-Napi::Object Init(Napi::Env env, Napi::Object exports) {
+Napi::Object Init(Napi::Env env, Napi::Object exports)
+{
 	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, js_init_slave));
-	exports.Set(Napi::String::New(env, "writeIndex"), Napi::Function::New(env, write_index));
-	exports.Set(Napi::String::New(env, "isOperational"), Napi::Function::New(env, get_operational_status));
-	exports.Set(Napi::String::New(env, "start"), Napi::Function::New(env, create_tsfn));
-	exports.Set(Napi::String::New(env, "stop"), Napi::Function::New(env, stop));
-	exports.Set(Napi::String::New(env, "getAllocatedDomain"), Napi::Function::New(env, get_allocated_domain));
-	exports.Set(Napi::String::New(env, "getMasterState"), Napi::Function::New(env, get_master_state));
-	exports.Set(Napi::String::New(env, "getDomainValues"), Napi::Function::New(env, get_domain_values));
-	exports.Set(Napi::String::New(env, "setFrequency"), Napi::Function::New(env, set_frequency));
+	exports.Set(Napi::String::New(env, "writeIndex"), Napi::Function::New(env, js_write_index));
+	exports.Set(Napi::String::New(env, "isOperational"), Napi::Function::New(env, js_get_operational_status));
+	exports.Set(Napi::String::New(env, "start"), Napi::Function::New(env, js_create_thread));
+	exports.Set(Napi::String::New(env, "stop"), Napi::Function::New(env, js_stop_thread));
+	exports.Set(Napi::String::New(env, "getAllocatedDomain"), Napi::Function::New(env, js_get_allocated_domain));
+	exports.Set(Napi::String::New(env, "getMasterState"), Napi::Function::New(env, js_get_master_state));
+	exports.Set(Napi::String::New(env, "getDomainValues"), Napi::Function::New(env, js_get_domain_values));
+	exports.Set(Napi::String::New(env, "setFrequency"), Napi::Function::New(env, js_set_frequency));
 	exports.Set(Napi::String::New(env, "writeDomain"), Napi::Function::New(env, js_write_by_key));
 	exports.Set(Napi::String::New(env, "readDomain"), Napi::Function::New(env, js_read_by_key));
 	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
