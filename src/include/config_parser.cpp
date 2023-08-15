@@ -7,7 +7,8 @@ uint32_t _to_uint(const rapidjson::Value&);
 uint8_t member_is_valid_array(const rapidjson::Value&, const char *);
 bool _slave_entries_sort_asc(slaveEntry, slaveEntry);
 
-off_t get_filesize(const char *filename) {
+off_t get_filesize(const char *filename)
+{
     struct stat st;
 
     if (stat(filename, &st) == 0){
@@ -17,7 +18,8 @@ off_t get_filesize(const char *filename) {
     return -1;
 }
 
-std::string normalize_hex_string(std::string str){
+std::string normalize_hex_string(std::string str)
+{
 	std::string output;
 	output.reserve(str.size()); // optional, avoids buffer reallocations in the loop
 	for(size_t i = 0; i < str.size(); ++i){
@@ -29,7 +31,8 @@ std::string normalize_hex_string(std::string str){
 	return output;
 }
 
-bool _slave_entries_sort_asc(slaveEntry p1, slaveEntry p2){
+bool _slave_entries_sort_asc(slaveEntry p1, slaveEntry p2)
+{
 	// sort by position, pdo_index, index, then subindex
 	if(p1.position < p2.position){
 		return true;
@@ -53,7 +56,8 @@ bool _slave_entries_sort_asc(slaveEntry p1, slaveEntry p2){
 	return false;
 }
 
-uint32_t _to_uint(const rapidjson::Value& val){
+uint32_t _to_uint(const rapidjson::Value& val)
+{
 	if(val.IsString()){
 		return std::stoi(normalize_hex_string(val.GetString()), 0, 16);
 	} else {
@@ -61,7 +65,8 @@ uint32_t _to_uint(const rapidjson::Value& val){
 	}
 }
 
-uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
+uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name)
+{
 	if(!doc.HasMember(name)){
 		return 0;
 	}
@@ -74,8 +79,9 @@ uint8_t member_is_valid_array(const rapidjson::Value& doc, const char *name){
 }
 
 int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entries,
-					uint8_t *slave_length, std::vector<startupConfig> &slave_parameters,
-					uint8_t *parameters_length, bool do_sort_slave){
+	slave_size_et *slave_length, std::vector<startupConfig> &slave_parameters,
+	sparam_size_et *parameters_length, bool do_sort_slave)
+{
 
 	rapidjson::Document document;
 	document.Parse(json_string);
@@ -87,8 +93,8 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 	/* ************************************ */
 
-	for (uint8_t i_slaves = 0; i_slaves < document.Size(); i_slaves++){
-		rapidjson::Value m_slaves = document[i_slaves].GetObject();
+	for (slave_size_et i_slaves = 0; i_slaves < document.Size(); i_slaves++){
+		rapidjson::Value::Object m_slaves = document[i_slaves].GetObject();
 
 		assert(m_slaves.HasMember("alias"));
 		assert(m_slaves.HasMember("position"));
@@ -96,7 +102,7 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 		assert(m_slaves.HasMember("product_code"));
 
 		uint16_t alias = _to_uint(m_slaves["alias"]);
-		uint16_t position = _to_uint(m_slaves["position"]);
+		ecat_pos_al position = _to_uint(m_slaves["position"]);
 		uint32_t vendor_id = _to_uint(m_slaves["vendor_id"]);
 		uint32_t product_code = _to_uint(m_slaves["product_code"]);
 
@@ -131,7 +137,8 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 		assert(m_slaves["syncs"].IsArray());
 
 		for(uint8_t i_syncs = 0; i_syncs < m_slaves["syncs"].Size(); i_syncs++){
-			rapidjson::Value m_syncs = m_slaves["syncs"][i_syncs].GetObject();
+			rapidjson::Value::Object m_syncs = m_slaves["syncs"][i_syncs].GetObject();
+
 			assert(m_syncs.HasMember("index"));
 			assert(m_syncs.HasMember("pdos"));
 			assert(m_syncs["pdos"].IsArray());
@@ -163,14 +170,14 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 				}
 			}
 
-			rapidjson::Value arr_pdos = m_syncs["pdos"].GetArray();
-			uint8_t size_arr_pdos = arr_pdos.Size();
+			rapidjson::Value::Array arr_pdos = m_syncs["pdos"].GetArray();
+			io_size_et size_arr_pdos = arr_pdos.Size();
 
-			for(uint8_t i_pdos = 0; i_pdos < size_arr_pdos; i_pdos++){
-				rapidjson::Value m_pdos = arr_pdos[i_pdos].GetObject();
+			for(io_size_et i_pdos = 0; i_pdos < size_arr_pdos; i_pdos++){
+				rapidjson::Value::Object m_pdos = arr_pdos[i_pdos].GetObject();
 				assert(m_pdos.HasMember("index"));
 
-				uint16_t pdo_index = _to_uint(m_pdos["index"]);
+				ecat_index_al pdo_index = _to_uint(m_pdos["index"]);
 
 				// add new slave entry if sync doesnt have pdo entries
 				if(!member_is_valid_array(m_pdos, "entries")){
@@ -200,19 +207,19 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 					continue;
 				}
 
-				rapidjson::Value arr_entries = m_pdos["entries"].GetArray();
-				uint8_t size_arr_entries = arr_entries.Size();
+				rapidjson::Value::Array arr_entries = m_pdos["entries"].GetArray();
+				int32_t size_arr_entries = arr_entries.Size();
 
-				for(uint8_t i_entries = 0; i_entries < size_arr_entries; i_entries++){
-					rapidjson::Value m_entries = arr_entries[i_entries].GetObject();
+				for(io_size_et i_entries = 0; i_entries < size_arr_entries; i_entries++){
+					rapidjson::Value::Object m_entries = arr_entries[i_entries].GetObject();
 
 					assert(m_entries.HasMember("index"));
 					assert(m_entries.HasMember("subindex"));
 					assert(m_entries.HasMember("size"));
 
-					uint16_t entry_index = -1;
-					uint8_t entry_subindex = -1;
-					uint8_t entry_size = -1;
+					ecat_index_al entry_index;
+					ecat_sub_al entry_subindex;
+					ecat_size_al entry_size;
 
 					entry_index = _to_uint(m_entries["index"]);
 					entry_subindex = _to_uint(m_entries["subindex"]);
@@ -270,21 +277,22 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 		if(member_is_valid_array(m_slaves, "parameters")){
 			assert(m_slaves["parameters"].IsArray());
 
-			for(uint8_t i_parameters = 0; i_parameters < m_slaves["parameters"].Size(); i_parameters++){
-				rapidjson::Value m_parameters = m_slaves["parameters"][i_parameters].GetObject();
+			*parameters_length = m_slaves["parameters"].Size();
+			for(io_size_et i_parameters = 0; i_parameters < *parameters_length; i_parameters++){
+				rapidjson::Value::Object m_parameters = m_slaves["parameters"][i_parameters].GetObject();
 				assert(m_parameters.HasMember("index"));
 				assert(m_parameters.HasMember("subindex"));
 				assert(m_parameters.HasMember("size"));
 				assert(m_parameters.HasMember("value"));
 
-				uint16_t p_index = _to_uint(m_parameters["index"]);
-				uint8_t p_subindex = _to_uint(m_parameters["subindex"]);
-				uint8_t p_size = _to_uint(m_parameters["size"]);
+				ecat_index_al p_index = _to_uint(m_parameters["index"]);
+				ecat_sub_al p_subindex = _to_uint(m_parameters["subindex"]);
+				ecat_size_al p_size = _to_uint(m_parameters["size"]);
 				uint32_t p_value = _to_uint(m_parameters["value"]);
 
 				slave_parameters.push_back({
 						p_size,
-						(uint8_t) position,
+						(ecat_pos_al) position,
 						p_index,
 						p_subindex,
 						p_value
@@ -296,13 +304,13 @@ int8_t parse_json(const char *json_string, std::vector<slaveEntry> &slave_entrie
 
 	// sort slave entries asc
 	if(do_sort_slave){
-#ifdef DEBUG
+#if DEBUG > 0
 	printf("Sorting slave entries...\n");
 #endif
 		std::sort(slave_entries.begin(), slave_entries.end(), _slave_entries_sort_asc);
 	}
 
-#ifdef DEBUG
+#if DEBUG > 0
 	printf("slave_length = %d\n", *slave_length);
 #endif
 

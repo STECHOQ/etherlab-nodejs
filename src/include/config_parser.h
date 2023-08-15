@@ -37,50 +37,71 @@
 
 /*****************************************************************************/
 
-typedef struct slaveConfig{
+typedef int32_t io_size_et;
+typedef uint16_t slave_size_et;
+typedef uint16_t sparam_size_et;
+
+typedef uint16_t ecat_pos_al;
+typedef uint16_t ecat_index_al;
+typedef uint8_t ecat_sub_al;
+typedef uint8_t ecat_size_al;
+typedef uint32_t ecat_value_al;
+
+typedef struct slaveConfig_s{
 	uint16_t alias; /**< Slave alias address. */
-	uint16_t position; /**< Slave position. */
+	ecat_pos_al position; /**< Slave position. */
 	uint32_t vendor_id; /**< Slave vendor ID. */
 	uint32_t product_code; /**< Slave product code. */
 	ec_slave_config_state_t state;
 } slaveConfig;
 
-typedef struct startupConfig{
-	uint8_t size;
-	uint8_t slavePosition;
-	uint16_t index;
-	uint8_t subindex;
-	uint32_t value;
+typedef struct startupConfig_s{
+	ecat_size_al size;
+	ecat_pos_al slavePosition;
+	ecat_index_al index;
+	ecat_sub_al subindex;
+	ecat_value_al value;
 } startupConfig;
 
-typedef struct slaveEntry{
+typedef struct slaveEntry_s{
 	uint16_t alias; /**< Slave alias address. */
-	uint16_t position; /**< Slave position. */
+	ecat_pos_al position; /**< Slave position. */
 	uint32_t vendor_id; /**< Slave vendor ID. */
 	uint32_t product_code; /**< Slave product code. */
 
 	uint8_t sync_index; /**< SM index. */
-	uint16_t pdo_index; /**< PDO entry index. */
+	ecat_index_al pdo_index; /**< PDO entry index. */
 
-	uint16_t index; /**< PDO entry index. */
-	uint8_t subindex; /**< PDO entry subindex. */
-	uint8_t size;
+	ecat_index_al index; /**< PDO entry index. */
+	ecat_sub_al subindex; /**< PDO entry subindex. */
+	ecat_size_al size;
 
 	uint8_t add_to_domain;
 
 	uint32_t offset;
 	uint32_t bit_position;
 
-	uint32_t value;
+	ecat_value_al value;
 	uint8_t direction;
 
 	uint8_t SWAP_ENDIAN;
 	uint8_t SIGNED;
 
-	uint32_t writtenValue;
+	ecat_value_al writtenValue;
 
 	uint8_t WATCHDOG_ENABLED;
 } slaveEntry;
+
+union Unit32b {
+	uint8_t byte;
+	uint16_t word;
+	uint32_t dword;
+};
+
+typedef enum sdo_req_type_en{
+    ECAT_SDO_READ = 0,
+    ECAT_SDO_WRITE = 1
+} sdo_req_type_al;
 
 /*****************************************************************************/
 
@@ -93,6 +114,7 @@ static const uint8_t SyncMEthercatDirection[] = {
 
 /*****************************************************************************/
 
-int8_t parse_json(const char *, std::vector<slaveEntry> &,
-					uint8_t *, std::vector<startupConfig> &,
-					uint8_t *, bool do_sort_slave);
+extern int8_t parse_json(const char *json_string,
+	std::vector<slaveEntry> &slave_entries, slave_size_et *slave_length,
+	std::vector<startupConfig> &slave_parameters, sparam_size_et *parameters_length,
+	bool do_sort_slave);

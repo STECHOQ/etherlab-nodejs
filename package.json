@@ -1,6 +1,6 @@
 {
 	"name": "etherlab-nodejs",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"description": "Bind Etherlab's ethercat master to node.js",
 	"main": "lib/ecat.lib.js",
 	"bin": {
@@ -23,10 +23,10 @@
 		"ethercat"
 	],
 	"author": "iqrok",
-	"license": "LGPLv2.1",
+	"license": "LGPL-2.1",
 	"dependencies": {
 		"bindings": "^1.5.0",
-		"node-addon-api": "^4.0.0",
-		"node-gyp": "^8.1.0"
+		"node-addon-api": "^6.0.0",
+		"node-gyp": "^9.3.1"
 	}
 }
