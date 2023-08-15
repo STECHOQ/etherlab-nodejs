@@ -93,9 +93,6 @@ void assign_domain_identifier();
 static uint16_t FREQUENCY = 1000;
 static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 
-// SDO Request
-static ec_sdo_request_t *sdo_req;
-
 // configuration
 static std::string json_path;
 static bool do_sort_slave;
@@ -240,24 +237,25 @@ int8_t write_output_value(io_size_et dmn_idx, ecat_value_al value, uint8_t SIGNE
 			break;
 
 		case 8:
-			EC_WRITE_S8(
-					DomainN_pd + IOs[dmn_idx].offset,
-					SIGNED ? (int8_t) value : (uint8_t) value
-				);
+			if(SIGNED)
+				EC_WRITE_S8(DomainN_pd + IOs[dmn_idx].offset, (int8_t) value);
+			else
+				EC_WRITE_U8(DomainN_pd + IOs[dmn_idx].offset, (uint8_t) value);
 			break;
 
 		case 16:
-			EC_WRITE_S16(
-					DomainN_pd + IOs[dmn_idx].offset,
-					SIGNED ? (int16_t) value : (int16_t) value
-				);
+			if(SIGNED)
+				EC_WRITE_S16(DomainN_pd + IOs[dmn_idx].offset, (int16_t) value);
+			else
+				EC_WRITE_U16(DomainN_pd + IOs[dmn_idx].offset, (uint16_t) value);
 			break;
 
 		case 32:
-			EC_WRITE_U32(
-					DomainN_pd + IOs[dmn_idx].offset,
-					SIGNED ? (int32_t) value : (uint32_t) value
-				);
+			if(SIGNED)
+				EC_WRITE_S32(DomainN_pd + IOs[dmn_idx].offset, (int32_t) value);
+			else
+				EC_WRITE_U32(DomainN_pd + IOs[dmn_idx].offset, (uint32_t) value);
+
 			break;
 
 		default:
@@ -1374,55 +1372,66 @@ Napi::Value get_master_state(const Napi::CallbackInfo& info)
 	return Napi::Number::New(env, master_state.al_states);
 }
 
-void set_sdo_data(const Napi::Env& env, const ecat_size_al& size, Napi::Value* value)
+void read_sdo_data(ec_sdo_request_t* req, const ecat_size_al& size, void* value)
 {
 	switch(size){
 		case 1: {
-			*value = Napi::Number::New(env,
-				EC_READ_U8(ecrt_sdo_request_data(sdo_req)));
+			uint8_t read = EC_READ_U8(ecrt_sdo_request_data(req));
+			memcpy(value, &read, size);
 		} break;
 
 		case 2: {
-			*value = Napi::Number::New(env,
-				EC_READ_U16(ecrt_sdo_request_data(sdo_req)));
+			uint16_t read = EC_READ_U16(ecrt_sdo_request_data(req));
+			memcpy(value, &read, size);
 		} break;
 
 		case 4: {
-			*value = Napi::Number::New(env,
-				EC_READ_U32(ecrt_sdo_request_data(sdo_req)));
+			uint32_t read = EC_READ_U32(ecrt_sdo_request_data(req));
+			memcpy(value, &read, size);
 		} break;
 
 		default: {
-			*value = Napi::Number::New(env,
-				EC_READ_U32(ecrt_sdo_request_data(sdo_req)));
+			uint32_t read = EC_READ_U32(ecrt_sdo_request_data(req));
+			memcpy(value, &read, size);
 		} break;
 	}
 }
 
-Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
+void write_sdo_data(ec_sdo_request_t* req, const ecat_size_al& size, void* value)
 {
-	Napi::Env env = info.Env();
+	Unit32b tmp;
+	memcpy(&tmp, value, size);
 
-	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
-	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
-	ecat_sub_al subindex = info[2].As<Napi::Number>().Uint32Value();
-	ecat_size_al size = info[3].As<Napi::Number>().Uint32Value();
-	uint32_t timeout = 100;
-	uint8_t verbosity = 0;
-	Napi::Value result;
+	switch(size){
+		case 1: {
+			EC_WRITE_U8(ecrt_sdo_request_data(req), tmp.byte);
+		} break;
 
+		case 2: {
+			EC_WRITE_U16(ecrt_sdo_request_data(req), tmp.word);
+		} break;
+
+		case 4: {
+			EC_WRITE_U32(ecrt_sdo_request_data(req), tmp.dword);
+		} break;
+
+		default: {
+			EC_WRITE_U32(ecrt_sdo_request_data(req), tmp.dword);
+		} break;
+	}
+}
+
+int8_t sdo_request(const sdo_req_type_al& rtype, void* result, const ecat_pos_al& pos,
+	const ecat_index_al& s_index, const ecat_sub_al& s_subindex,
+	const ecat_size_al& size, const uint32_t& timeout, const uint8_t& verbosity)
+{
 	struct timespec start, current;
 
 	ec_slave_config_t* slave;
 	ec_slave_config_state_t* state;
 
-	if(info.Length() > 4 && info[4].IsNumber()){
-		timeout = info[4].As<Napi::Number>().Uint32Value();
-	}
-
-	if(info.Length() > 5 && info[5].IsNumber()){
-		verbosity = info[5].As<Napi::Number>().Uint32Value();
-	}
+	// SDO Request
+	ec_sdo_request_t *sdo_req;
 
 	try {
 		slave = sc_slaves.at(pos);
@@ -1435,13 +1444,14 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 				pos, sc_slaves.size());
 		}
 
-		return env.Undefined();
+		return 2;
 	}
 
 #if DEBUG > 1
 	fprintf(stdout,
-		"Slave %d 0x%04x:%02x - Online %02x | OP %02x | State %02x\n",
-		pos, index, subindex, state->online, state->operational, state->al_state);
+		"%d Slave %d 0x%04x:%02x - Online %02x | OP %02x | State %02x\n",
+		rtype, pos, s_index, s_subindex, state->online, state->operational,
+		state->al_state);
 #endif
 
 	// TODO: Find how Busy Request never ends once it happens.
@@ -1450,22 +1460,28 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 	if(state->al_state == 0x01){
 		if(verbosity > 0){
 			fprintf(stderr, "Slave %d 0x%04x:%02x is in INIT state! (%02x)\n",
-				pos, index, subindex, state->al_state);
+				pos, s_index, s_subindex, state->al_state);
 		}
 
-		return env.Undefined();
+		return 3;
 	}
 
-	if (!(sdo_req = ecrt_slave_config_create_sdo_request(slave, index, subindex, size))) {
+	if (!(sdo_req = ecrt_slave_config_create_sdo_request(slave, s_index, s_subindex, size))) {
 		if(verbosity > 0){
 			fprintf(stderr, "Failed to create SDO request!\n");
 		}
 
-		return env.Undefined();
+		return 1;
 	}
 
-	// trigger read
-	ecrt_sdo_request_read(sdo_req);
+	if(rtype == ECAT_SDO_READ){
+		ecrt_sdo_request_read(sdo_req);
+	} else {
+		// data should be set before requesting sdo
+		write_sdo_data(sdo_req, size, result);
+		ecrt_sdo_request_write(sdo_req);
+	}
+
 	ecrt_sdo_request_timeout(sdo_req, timeout);
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
@@ -1473,6 +1489,9 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 	while(1){
 		switch (ecrt_sdo_request_state(sdo_req)) {
 			case EC_REQUEST_UNUSED:
+				if(verbosity > 0){
+					fprintf(stderr, "Unused request!\n");
+				}
 				// request was not used yet, trigger read
 				ecrt_sdo_request_read(sdo_req);
 				break;
@@ -1488,19 +1507,90 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 						fprintf(stderr, "Timeout waiting for Busy Request!\n");
 					}
 
-					return env.Undefined();
+					return 4;
 				}
 				break;
 
 			case EC_REQUEST_SUCCESS: {
-				set_sdo_data(env, size, &result);
-				return result;
+				read_sdo_data(sdo_req, size, result);
+				return 0;
 			} break;
 
 			case EC_REQUEST_ERROR:{
-				return env.Undefined();
+				return -1;
 			} break;
 		}
+	}
+}
+
+Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	ecat_pos_al pos = info[0].As<Napi::Number>().Uint32Value();
+	ecat_index_al index = info[1].As<Napi::Number>().Uint32Value();
+	ecat_sub_al subindex = info[2].As<Napi::Number>().Uint32Value();
+	ecat_size_al size = info[3].As<Napi::Number>().Uint32Value();
+
+	sdo_req_type_al rtype = ECAT_SDO_READ;
+
+	uint32_t timeout = 100;
+	uint8_t verbosity = 0;
+	Unit32b tmp;
+
+	if(info.Length() > 4 && info[4].IsNumber()){
+		timeout = info[4].As<Napi::Number>().Uint32Value();
+	}
+
+	if(info.Length() > 5 && info[5].IsNumber()){
+		verbosity = info[5].As<Napi::Number>().Uint32Value();
+	}
+
+	if((sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)) != 0){
+		return env.Undefined();
+	}
+
+	switch(size){
+		case 1: return Napi::Number::New(env, tmp.byte);
+		case 2: return Napi::Number::New(env, tmp.word);
+		case 3: return Napi::Number::New(env, tmp.dword);
+		default: return Napi::Number::New(env, tmp.dword);
+	}
+}
+
+Napi::Value js_sdo_request_write(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	Unit32b tmp;
+	tmp.dword = info[0].As<Napi::Number>().Uint32Value();
+
+	ecat_pos_al pos = info[1].As<Napi::Number>().Uint32Value();
+	ecat_index_al index = info[2].As<Napi::Number>().Uint32Value();
+	ecat_sub_al subindex = info[3].As<Napi::Number>().Uint32Value();
+	ecat_size_al size = info[4].As<Napi::Number>().Uint32Value();
+
+	sdo_req_type_al rtype = ECAT_SDO_WRITE;
+
+	uint32_t timeout = 100;
+	uint8_t verbosity = 0;
+	if(info.Length() > 5 && info[5].IsNumber()){
+		timeout = info[5].As<Napi::Number>().Uint32Value();
+	}
+
+	if(info.Length() > 6 && info[6].IsNumber()){
+		verbosity = info[6].As<Napi::Number>().Uint32Value();
+	}
+
+	if((sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)) != 0){
+		return env.Undefined();
+	}
+
+	switch(size){
+		case 1: return Napi::Number::New(env, tmp.byte);
+		case 2: return Napi::Number::New(env, tmp.word);
+		case 3: return Napi::Number::New(env, tmp.dword);
+		default: return Napi::Number::New(env, tmp.dword);
 	}
 }
 
@@ -1518,6 +1608,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set(Napi::String::New(env, "readDomain"), Napi::Function::New(env, js_read_by_key));
 	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
 	exports.Set(Napi::String::New(env, "sdoRead"), Napi::Function::New(env, js_sdo_request_read));
+	exports.Set(Napi::String::New(env, "sdoWrite"), Napi::Function::New(env, js_sdo_request_write));
 
 	return exports;
 }

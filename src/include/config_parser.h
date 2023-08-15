@@ -92,6 +92,17 @@ typedef struct slaveEntry_s{
 	uint8_t WATCHDOG_ENABLED;
 } slaveEntry;
 
+union Unit32b {
+	uint8_t byte;
+	uint16_t word;
+	uint32_t dword;
+};
+
+typedef enum sdo_req_type_en{
+    ECAT_SDO_READ = 0,
+    ECAT_SDO_WRITE = 1
+} sdo_req_type_al;
+
 /*****************************************************************************/
 
 static const uint8_t SyncMEthercatDirection[] = {
