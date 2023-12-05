@@ -1,0 +1,17 @@
+{
+	"name": "test",
+	"main": "index.test.js",
+	"scripts": {
+		"test": "jest --runInBand"
+	},
+	"jest": {
+		"bail": 1,
+		"verbose": true,
+		"testTimeout": 30000,
+		"maxWorkers": 1
+	},
+	"license": "MIT",
+	"dependencies": {
+		"jest": "^29.7.0"
+	}
+}
