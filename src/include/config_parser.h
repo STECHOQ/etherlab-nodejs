@@ -96,6 +96,15 @@ union Unit32b {
 	uint8_t byte;
 	uint16_t word;
 	uint32_t dword;
+	uint8_t array[4];
+};
+
+union Unit64b {
+	uint8_t byte;
+	uint16_t word;
+	uint32_t dword;
+	uint64_t qword;
+	uint8_t array[8];
 };
 
 typedef enum sdo_req_type_en{

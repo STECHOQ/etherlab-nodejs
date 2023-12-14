@@ -84,10 +84,10 @@ inline static uint32_t _convert_index_sub_size(ecat_index_al index,
 static std::map<uint32_t, io_size_et> mapped_domains;
 inline static uint32_t _convert_pos_index_sub(const ecat_pos_al& s_position,
 	const ecat_index_al& s_index, const ecat_sub_al& s_subindex);
-static io_size_et get_domain_index(io_size_et* dmn_idx,
+static inline io_size_et get_domain_index(io_size_et* dmn_idx,
 	const ecat_pos_al& s_position, const ecat_index_al& s_index,
 	const ecat_sub_al& s_subindex);
-void assign_domain_identifier();
+static inline void assign_domain_identifier();
 
 // Periodic task timing
 static uint16_t FREQUENCY = 1000;
@@ -476,7 +476,7 @@ void domain_startup_config(ec_pdo_entry_reg_t **DomainN_regs, io_size_et *dmn_si
 	(*DomainN_regs)[(*dmn_size)] = {};
 }
 
-uint32_t _convert_index_sub_size(ecat_index_al index, ecat_sub_al subindex,
+inline uint32_t _convert_index_sub_size(ecat_index_al index, ecat_sub_al subindex,
 	ecat_size_al size)
 {
 	return ((index & 0xffff) << 16) | ((subindex & 0xff) << 8) | (size & 0xff);
@@ -631,7 +631,7 @@ void syncmanager_startup_config()
 	}
 }
 
-uint8_t _skip_current_slave_position(ecat_pos_al position,
+static inline uint8_t _skip_current_slave_position(ecat_pos_al position,
 									std::vector<ecat_pos_al>& last_positions)
 {
 	for(slave_size_et slNumber = 0; slNumber < last_positions.size(); slNumber++){
@@ -996,15 +996,14 @@ void read_sdo_data(ec_sdo_request_t* req, const ecat_size_al& size, void* value)
 		} break;
 
 		default: {
-			uint32_t read = EC_READ_U32(ecrt_sdo_request_data(req));
-			memcpy(value, &read, size);
+			memcpy(value, ecrt_sdo_request_data(req), size);
 		} break;
 	}
 }
 
 void write_sdo_data(ec_sdo_request_t* req, const ecat_size_al& size, void* value)
 {
-	Unit32b tmp;
+	Unit64b tmp;
 	memcpy(&tmp, value, size);
 
 	switch(size){
@@ -1542,7 +1541,7 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 
 	uint32_t timeout = 100;
 	uint8_t verbosity = 0;
-	Unit32b tmp;
+	Unit64b tmp;
 
 	if(info.Length() > 4 && info[4].IsNumber()){
 		timeout = info[4].As<Napi::Number>().Uint32Value();
@@ -1552,15 +1551,15 @@ Napi::Value js_sdo_request_read(const Napi::CallbackInfo& info)
 		verbosity = info[5].As<Napi::Number>().Uint32Value();
 	}
 
-	if((sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)) != 0){
+	if(sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)){
 		return env.Undefined();
 	}
 
 	switch(size){
 		case 1: return Napi::Number::New(env, tmp.byte);
 		case 2: return Napi::Number::New(env, tmp.word);
-		case 3: return Napi::Number::New(env, tmp.dword);
-		default: return Napi::Number::New(env, tmp.dword);
+		case 4: return Napi::Number::New(env, tmp.dword);
+		default: return Napi::Buffer<uint8_t>::Copy(env, tmp.array, size);
 	}
 }
 
@@ -1568,7 +1567,7 @@ Napi::Value js_sdo_request_write(const Napi::CallbackInfo& info)
 {
 	Napi::Env env = info.Env();
 
-	Unit32b tmp;
+	Unit64b tmp;
 	tmp.dword = info[0].As<Napi::Number>().Uint32Value();
 
 	ecat_pos_al pos = info[1].As<Napi::Number>().Uint32Value();
@@ -1588,15 +1587,15 @@ Napi::Value js_sdo_request_write(const Napi::CallbackInfo& info)
 		verbosity = info[6].As<Napi::Number>().Uint32Value();
 	}
 
-	if((sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)) != 0){
+	if(sdo_request(rtype, &tmp, pos, index, subindex, size, timeout, verbosity)){
 		return env.Undefined();
 	}
 
 	switch(size){
 		case 1: return Napi::Number::New(env, tmp.byte);
 		case 2: return Napi::Number::New(env, tmp.word);
-		case 3: return Napi::Number::New(env, tmp.dword);
-		default: return Napi::Number::New(env, tmp.dword);
+		case 4: return Napi::Number::New(env, tmp.dword);
+		default: return Napi::Buffer<uint8_t>::Copy(env, tmp.array, size);
 	}
 }
 
