@@ -3,10 +3,6 @@
 	"version": "0.1.4",
 	"description": "Bind Etherlab's ethercat master to node.js",
 	"main": "lib/ecat.lib.js",
-	"bin": {
-		"ecat-run": "bin/cli.js",
-		"ecat-config": "bin/configure.js"
-	},
 	"scripts": {
 		"preinstall": "rm -rf build/",
 		"postinstall": "npm run rebuild",
