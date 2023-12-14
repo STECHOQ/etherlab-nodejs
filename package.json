@@ -9,7 +9,8 @@
 	},
 	"scripts": {
 		"preinstall": "rm -rf build/",
-		"postinstall": "node-gyp rebuild",
+		"postinstall": "npm run rebuild",
+		"rebuild": "node-gyp rebuild",
 		"test": "cd test && npm test"
 	},
 	"repository": {
