@@ -96,6 +96,7 @@ static uint32_t PERIOD_NS = NSEC_PER_SEC / FREQUENCY;
 // configuration
 static std::string json_path;
 static bool do_sort_slave;
+static bool emit_data = false;
 
 // Data structure representing our thread-safe function context.
 struct TsfnContext {
@@ -807,7 +808,7 @@ inline static uint32_t _convert_pos_index_sub(const ecat_pos_al& s_position,
 	return (s_position << 24) | (s_index << 8) | (s_subindex << 0);
 }
 
-static io_size_et get_domain_index(io_size_et* dmn_idx,
+static inline io_size_et get_domain_index(io_size_et* dmn_idx,
 	const ecat_pos_al& s_position, const ecat_index_al& s_index,
 	const ecat_sub_al& s_subindex)
 {
@@ -827,7 +828,7 @@ static io_size_et get_domain_index(io_size_et* dmn_idx,
 	}
 }
 
-int8_t write_domain(const ecat_pos_al& s_position,
+inline int8_t write_domain(const ecat_pos_al& s_position,
 	const ecat_index_al& s_index, const ecat_sub_al& s_subindex,
 	const ecat_value_al& value)
 {
@@ -845,7 +846,7 @@ int8_t write_domain(const ecat_pos_al& s_position,
 	return 0;
 }
 
-int8_t read_domain(const ecat_pos_al& s_position, const ecat_index_al& s_index,
+inline int8_t read_domain(const ecat_pos_al& s_position, const ecat_index_al& s_index,
 	const ecat_sub_al& s_subindex, ecat_value_al* value)
 {
 	if(!check_is_operational()){
@@ -1146,6 +1147,11 @@ void finalizer_callback(Napi::Env env, void *finalizeData, TsfnContext *context)
 // threadsafe-function context created inside the main thread.
 void thread_entry(TsfnContext *context) {
 	auto callback = [](Napi::Env env, Napi::Function jsCallback, int8_t* data) {
+		if(!emit_data){
+			jsCallback.Call({ Napi::Number::New(env, master_state.al_states) });
+			return;
+		}
+
 		Napi::Array values = Napi::Array::New(env, IOs_length);
 
 		for(io_size_et dmn_idx = 0; dmn_idx < IOs_length; dmn_idx++){
@@ -1159,8 +1165,8 @@ void thread_entry(TsfnContext *context) {
 		}
 
 		jsCallback.Call({
+				Napi::Number::New(env, master_state.al_states),
 				values,
-				Napi::Number::New(env, master_state.al_states)
 			});
 	};
 
@@ -1599,6 +1605,24 @@ Napi::Value js_sdo_request_write(const Napi::CallbackInfo& info)
 	}
 }
 
+Napi::Value js_set_emit_data(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	if(info.Length() <= 0) return env.Undefined();
+
+	emit_data = info[0].As<Napi::Boolean>();
+
+	return env.Undefined();
+}
+
+Napi::Value js_get_emit_data(const Napi::CallbackInfo& info)
+{
+	Napi::Env env = info.Env();
+
+	return Napi::Boolean::New(env, emit_data);
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports)
 {
 	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, js_init_slave));
@@ -1615,6 +1639,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports)
 	exports.Set(Napi::String::New(env, "getMappedDomains"), Napi::Function::New(env, js_get_mapped_domains));
 	exports.Set(Napi::String::New(env, "sdoRead"), Napi::Function::New(env, js_sdo_request_read));
 	exports.Set(Napi::String::New(env, "sdoWrite"), Napi::Function::New(env, js_sdo_request_write));
+	exports.Set(Napi::String::New(env, "setEmitData"), Napi::Function::New(env, js_set_emit_data));
+	exports.Set(Napi::String::New(env, "getEmitData"), Napi::Function::New(env, js_get_emit_data));
 
 	return exports;
 }
