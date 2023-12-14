@@ -2,7 +2,7 @@ const Ethercat = require('..');
 
 const ecat = new Ethercat(`${__dirname}/slaves.json`, 5000);
 
-let isReady = false
+let isReady = false;
 
 const values = [
 		3000,
@@ -13,16 +13,21 @@ const values = [
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+test('Get Slaves name', async () => {
+	const slaves = [
+		ecat.sdoRead(1, 0x1008, 0x00, 6),
+		ecat.sdoRead(2, 0x1008, 0x00, 6),
+	];
+
+	expect(slaves[0].toString()).toBe('EL3174');
+	expect(slaves[1].toString()).toBe('EL4004');
+});
+
 test('Starting Ethercat Master', async () => {
 	ecat.start();
 
-	ecat.on('error', error => {
-		console.error(error);
-	});
-
-	ecat.on('ready', () => {
-		isReady = true
-	});
+	ecat.on('error', error => console.error(error));
+	ecat.on('ready', () => { isReady = true });
 
 	const timeStart = Date.now();
 	while(!isReady) {
